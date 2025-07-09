@@ -1,0 +1,27 @@
+name: pagseguro_smart_flutter_example
+description: Demonstrates how to use the pagseguro_payment_tech plugin.
+
+publish_to: "none"
+
+environment:
+  sdk: ">=2.16.2 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  pagseguro_payment_tech:
+    path: ../
+
+  cupertino_icons: ^1.0.2
+  bot_toast: ^4.0.4
+  flutter_masked_text2: ^0.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^1.0.0
+
+flutter:
+  uses-material-design: true
