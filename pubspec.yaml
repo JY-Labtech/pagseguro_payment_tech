@@ -11,12 +11,12 @@ dependencies:
   flutter:
     sdk: flutter
   path_provider: ^2.1.1
+  check_licence_tech: ^0.0.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^1.0.0
-  check_licence_tech: ^0.0.3
 
 flutter:
   plugin:
