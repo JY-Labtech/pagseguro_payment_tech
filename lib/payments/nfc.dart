@@ -11,7 +11,7 @@ final class Nfc {
   final MethodChannel _channel;
   final NfcHandler _nfcHandler;
   final String _licenceKey;
-  final CheckLicenceTech _licence = CheckLicenceTech();
+  final CheckLicenceTech _licence = CheckLicenceTech.instance();
 
   bool _isValidLicence = false;
 
