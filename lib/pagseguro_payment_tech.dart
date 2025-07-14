@@ -1,8 +1,8 @@
+import 'package:check_licence_tech/check_licence_tech.dart';
 import 'package:flutter/services.dart';
-import 'package:pagseguro_payment_tech/licence/licence_service.dart';
-
 import 'package:pagseguro_payment_tech/payments/handler/nfc_handler.dart';
 import 'package:pagseguro_payment_tech/payments/nfc.dart';
+
 import 'payments/handler/payment_handler.dart';
 import 'payments/payment.dart';
 
@@ -26,18 +26,17 @@ class PagseguroPaymentTech {
     _channel = const MethodChannel(CHANNEL_NAME);
   }
 
+  final _check = CheckLicenceTech();
+
+  Future<String> getSerialNumber() async => await _check.getSerialNumber();
+
   /// Inicializa o pagamento e registra o handler
   Future<Payment> initPayment({
     required PaymentHandler handler,
     required String licenceKey,
   }) async {
     try {
-      final isValid = await LicenceService().checkLicence(licenceKey: licenceKey);
-      if (!isValid) {
-        throw Exception('Invalid licence key. Please check your licence key.');
-      }
-
-      _payment = Payment(channel: _channel, paymentHandler: handler);
+      _payment = await Payment.create(channel: _channel, paymentHandler: handler, licenceKey: licenceKey);
       return _payment!;
     } catch (e) {
       print('Error initializing payment: $e');
@@ -51,12 +50,7 @@ class PagseguroPaymentTech {
     required String licenceKey,
   }) async {
     try {
-      final isValid = await LicenceService().checkLicence(licenceKey: licenceKey);
-      if (!isValid) {
-        throw Exception('Invalid licence key. Please check your licence key.');
-      }
-
-      _nfc = Nfc(channel: _channel, nfcHandler: handler);
+      _nfc = await Nfc.internal(channel: _channel, nfcHandler: handler, licenceKey: licenceKey);
       return _nfc!;
     } catch (e) {
       print('Error initializing payment: $e');

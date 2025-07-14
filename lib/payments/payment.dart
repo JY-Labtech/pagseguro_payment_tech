@@ -1,36 +1,79 @@
 // ignore_for_file: constant_identifier_names
+import 'package:check_licence_tech/check_licence_tech.dart';
 import 'package:flutter/services.dart';
+import 'package:pagseguro_payment_tech/licence/constants/licence_constants.dart';
 
 import 'package:pagseguro_payment_tech/payments/handler/payment_handler.dart';
 import 'package:pagseguro_payment_tech/payments/utils/payment_types.dart';
 
 //Fixed channel name
-const CHANNEL_NAME = "pagseguro_payment_tech";
-const USER_REFERENCE = "SMARTPOS"; //Only letters and numbers
 
-class Payment {
+final class Payment {
   final MethodChannel channel;
   final PaymentHandler paymentHandler;
+  final String licenceKey;
 
-  Payment({
+  bool _isValidLicence = false;
+  final CheckLicenceTech _licence = CheckLicenceTech();
+
+  Payment._({
     required this.channel,
     required this.paymentHandler,
-  }) {
-    channel.setMethodCallHandler(_callHandler);
+    required this.licenceKey,
+  });
+
+  /// Método factory assíncrono para criação controlada e validação da licença
+  static Future<Payment> create({
+    required MethodChannel channel,
+    required PaymentHandler paymentHandler,
+    required String licenceKey,
+  }) async {
+    final payment = Payment._(
+      channel: channel,
+      paymentHandler: paymentHandler,
+      licenceKey: licenceKey,
+    );
+
+    final valid = await payment._checkLicence();
+    if (!valid) {
+      throw Exception('Invalid licence key. Please check your licence key.');
+    }
+    payment._isValidLicence = true;
+    payment.channel.setMethodCallHandler(payment._callHandler);
+    return payment;
   }
+
+  Future<bool> _checkLicence() async {
+    if (licenceKey.isEmpty) {
+      return false;
+    }
+    return await _licence.checkLicence(
+      licenceKey,
+      url: licenceCheck,
+    );
+  }
+
+  void _ensureLicence() {
+    if (!_isValidLicence) {
+      throw Exception('Invalid licence key. Please check your licence key.');
+    }
+  }
+
   //Create external functions from invoke methodChannel
   //Function to active pinpad with sdk the PagSeguro
   Future<bool> activePinpad(String activationCode) async {
+    _ensureLicence();
     try {
       await channel.invokeMethod(PaymentTypeCall.ACTIVEPINPAD.method, {"code": activationCode});
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
-//Function to invoke method from credit payment with sdk the PagSeguro
+  //Function to invoke method from credit payment with sdk the PagSeguro
   Future<bool> creditPayment(int value, {String userReference = USER_REFERENCE, bool printReceipt = true, bool partialPay = false, bool isCarne = false}) async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.CREDIT.method, {
       "value": value,
       "userReference": _sanitizeUserReference(userReference),
@@ -40,8 +83,9 @@ class Payment {
     });
   }
 
-//Function to invoke method from credit installment payment  with sdk the PagSeguro
+  //Function to invoke method from credit installment payment  with sdk the PagSeguro
   Future<bool> creditPaymentParc(int value, int parc, {PaymentTypeCredit type = PaymentTypeCredit.CLIENT, String userReference = USER_REFERENCE, bool printReceipt = true, bool partialPay = false, bool isCarne = false}) async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.CREDIT_PARC.method, {
       "value": value,
       "parc": parc,
@@ -53,8 +97,9 @@ class Payment {
     });
   }
 
-//Function to invoke method from debit payment with sdk the PagSeguro
+  //Function to invoke method from debit payment with sdk the PagSeguro
   Future<bool> debitPayment(int value, {String userReference = USER_REFERENCE, bool printReceipt = true, bool partialPay = false, bool isCarne = false}) async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.DEBIT.method, {
       "value": value,
       "userReference": _sanitizeUserReference(userReference),
@@ -64,8 +109,9 @@ class Payment {
     });
   }
 
-  //Function to invoke method from debit payment with sdk the PagSeguro
+  //Function to invoke method from pix payment with sdk the PagSeguro
   Future<bool> pixPayment(int value, {String userReference = USER_REFERENCE, bool printReceipt = true, bool partialPay = false, bool isCarne = false}) async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.PIX.method, {
       "value": value,
       "userReference": _sanitizeUserReference(userReference),
@@ -75,8 +121,9 @@ class Payment {
     });
   }
 
-//Function to invoke method from voucher payment with sdk the PagSeguro
+  //Function to invoke method from voucher payment with sdk the PagSeguro
   Future<bool> voucherPayment(int value, {String userReference = USER_REFERENCE, bool printReceipt = true, bool partialPay = false, bool isCarne = false}) async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.VOUCHER.method, {
       "value": value,
       "userReference": _sanitizeUserReference(userReference),
@@ -86,8 +133,18 @@ class Payment {
     });
   }
 
-//Function to invoke method from credit installment payment  with sdk the PagSeguro
-  Future<bool> startPayment(PaymentType type, int amount, {PaymentTypeCredit installmentType = PaymentTypeCredit.CLIENT, int installments = 1, String userReference = USER_REFERENCE, bool printReceipt = true, bool partialPay = false, bool isCarne = false}) async {
+  //Function to invoke method from credit installment payment with sdk the PagSeguro
+  Future<bool> startPayment(
+    PaymentType type,
+    int amount, {
+    PaymentTypeCredit installmentType = PaymentTypeCredit.CLIENT,
+    int installments = 1,
+    String userReference = USER_REFERENCE,
+    bool printReceipt = true,
+    bool partialPay = false,
+    bool isCarne = false,
+  }) async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.START_PAYMENT.method, {
       "type": type.value,
       "amount": amount,
@@ -103,26 +160,34 @@ class Payment {
   //OPERATIONS
   //Function to invoke method from abort current transaction with sdk the PagSeguro
   Future<bool> abortTransaction() async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.ABORT.method);
   }
 
-//Function to invoke method from get last transaction with sdk the PagSeguro
+  //Function to invoke method from get last transaction with sdk the PagSeguro
   Future<bool> lastTransaction() async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.LAST_TRANSACTION.method);
   }
 
-//Function to invoke method from refund transaction with sdk the PagSeguro
+  //Function to invoke method from refund transaction with sdk the PagSeguro
   Future<bool> refund({String? transactionCode, String? transactionId}) async {
-    return await channel.invokeMethod(PaymentTypeCall.REFUND.method, {"transactionCode": transactionCode, "transactionId": transactionId});
+    _ensureLicence();
+    return await channel.invokeMethod(PaymentTypeCall.REFUND.method, {
+      "transactionCode": transactionCode,
+      "transactionId": transactionId,
+    });
   }
 
-//Function to invoke method from return status of the pinpad
+  //Function to invoke method from return status of the pinpad
   Future<bool> isAuthenticated() async {
+    _ensureLicence();
     return await channel.invokeMethod(PaymentTypeCall.PINPAD_AUTHENTICATED.method);
   }
 
   //Function to printer from file path
   Future<bool> printerfromFile(String path) async {
+    _ensureLicence();
     try {
       await channel.invokeMethod(
         PaymentTypeCall.PRINTER_FILE.method,
@@ -131,13 +196,14 @@ class Payment {
         },
       );
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
   //Function to printerFile from fileName
   Future<bool> printerFile(String fileName) async {
+    _ensureLicence();
     try {
       await channel.invokeMethod(
         PaymentTypeCall.PRINTER.method,
@@ -146,13 +212,14 @@ class Payment {
         },
       );
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
   //Function to printer from file path
   Future<bool> printer(String filePath) async {
+    _ensureLicence();
     try {
       await channel.invokeMethod(
         PaymentTypeCall.PRINTER_BASIC.method,
@@ -161,12 +228,13 @@ class Payment {
         },
       );
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
   Future<bool> printerFilePath(String filePath) async {
+    _ensureLicence();
     try {
       await channel.invokeMethod(
         PaymentTypeCall.PRINTER_FILE_PATH.method,
@@ -175,32 +243,34 @@ class Payment {
         },
       );
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
   //Reboot device
   Future<bool> rebootDevice() async {
+    _ensureLicence();
     try {
       channel.invokeMethod(PaymentTypeCall.REBOOT.method);
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
   //Emitter beep device
   Future<bool> beep() async {
+    _ensureLicence();
     try {
       channel.invokeMethod(PaymentTypeCall.BEEP.method);
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
-//Function to listen to pagseguro returns in the native environment and notify Flutter
+  //Function to listen to pagseguro returns in the native environment and notify Flutter
   Future<dynamic> _callHandler(MethodCall call) async {
     switch (call.method.handler) {
       case PaymentTypeHandler.ON_TRANSACTION_SUCCESS:
@@ -257,7 +327,6 @@ class Payment {
           paymentHandler.onAuthProgress(call.arguments);
         }
         break;
-
       case PaymentTypeHandler.ON_TRANSACTION_INFO:
         {
           paymentHandler.onTransactionInfo(
@@ -267,7 +336,6 @@ class Payment {
           );
         }
         break;
-
       default:
         throw "METHOD NOT IMPLEMENTED";
     }
