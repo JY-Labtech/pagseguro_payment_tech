@@ -1,3 +1,8 @@
+## 1.0.6
+
+- First release
+- Update dart sdk
+
 ## 1.0.5
 
 - First release
