@@ -26,7 +26,7 @@ class PagseguroPaymentTech {
     _channel = const MethodChannel(CHANNEL_NAME);
   }
 
-  final _check = CheckLicenceTech();
+  final _check = CheckLicenceTech.instance();
 
   Future<String> getSerialNumber() async => await _check.getSerialNumber();
 
@@ -36,6 +36,9 @@ class PagseguroPaymentTech {
     required String licenceKey,
   }) async {
     try {
+      if (_payment != null) {
+        throw Exception("Payment já inicializado.");
+      }
       _payment = await Payment.create(channel: _channel, paymentHandler: handler, licenceKey: licenceKey);
       return _payment!;
     } catch (e) {
@@ -50,6 +53,9 @@ class PagseguroPaymentTech {
     required String licenceKey,
   }) async {
     try {
+      if (_nfc != null) {
+        throw Exception("NFC já inicializado.");
+      }
       _nfc = await Nfc.internal(channel: _channel, nfcHandler: handler, licenceKey: licenceKey);
       return _nfc!;
     } catch (e) {

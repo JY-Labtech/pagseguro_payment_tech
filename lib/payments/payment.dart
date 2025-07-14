@@ -14,7 +14,7 @@ final class Payment {
   final String licenceKey;
 
   bool _isValidLicence = false;
-  final CheckLicenceTech _licence = CheckLicenceTech();
+  final CheckLicenceTech _licence = CheckLicenceTech.instance();
 
   Payment._({
     required this.channel,
