@@ -1,193 +1,173 @@
+// ignore_for_file: constant_identifier_names
+import 'package:check_licence_tech/check_licence_tech.dart';
 import 'package:flutter/services.dart';
+import 'package:pagseguro_payment_tech/licence/constants/licence_constants.dart';
 import 'package:pagseguro_payment_tech/payments/handler/nfc_handler.dart';
 import 'package:pagseguro_payment_tech/payments/utils/payment_types.dart';
 
 const CHANNEL_NFC_NAME = "pagseguro_payment_tech";
 
-class Nfc {
-  final MethodChannel channel;
-  final NfcHandler nfcHandler;
+final class Nfc {
+  final MethodChannel _channel;
+  final NfcHandler _nfcHandler;
+  final String _licenceKey;
+  final CheckLicenceTech _licence = CheckLicenceTech();
 
-  Nfc({required this.channel, required this.nfcHandler}) {
-    channel.setMethodCallHandler(_callHandler);
+  bool _isValidLicence = false;
+
+  Nfc._internal({
+    required MethodChannel channel,
+    required NfcHandler nfcHandler,
+    required String licenceKey,
+  })  : _channel = channel,
+        _nfcHandler = nfcHandler,
+        _licenceKey = licenceKey;
+
+  /// Exposto apenas internamente no package
+  static Future<Nfc> internal({
+    required MethodChannel channel,
+    required NfcHandler nfcHandler,
+    required String licenceKey,
+  }) async {
+    final nfc = Nfc._internal(
+      channel: channel,
+      nfcHandler: nfcHandler,
+      licenceKey: licenceKey,
+    );
+    await nfc._checkLicence();
+    if (!nfc._isValidLicence) {
+      throw Exception('Invalid licence key. Please check your licence key.');
+    }
+    nfc._channel.setMethodCallHandler(nfc._callHandler);
+    return nfc;
   }
 
-  Future<void> closeMethodCallHandler() async {
-    return channel.setMethodCallHandler(null);
+  void closeMethodCallHandler() {
+    _channel.setMethodCallHandler(null);
   }
 
-  //OPERATIONS
-  Future<bool> abortTransaction() async {
-    await channel.invokeMethod(PaymentTypeCall.ABORT.method);
+  Future<void> _checkLicence() async {
+    if (_isValidLicence) return;
+    if (_licenceKey.isEmpty) throw Exception('Licence key is empty.');
+    _isValidLicence = await _licence.checkLicence(_licenceKey, url: licenceCheck);
+    if (!_isValidLicence) {
+      throw Exception('Invalid licence key. Please check your licence key.');
+    }
+  }
+
+  Future<bool> _invoke(String method, [Map<String, dynamic>? arguments]) async {
+    await _checkLicence();
+    await _channel.invokeMethod(method, arguments);
     return true;
   }
 
-  Future<bool> lastTransaction() async {
-    await channel.invokeMethod(PaymentTypeCall.LAST_TRANSACTION.method);
-    return true;
-  }
+  Future<bool> abortTransaction() => _invoke(PaymentTypeCall.ABORT.method);
 
-  Future<bool> refund({required String transactionCode, required String transactionId}) async {
-    await channel.invokeMethod(PaymentTypeCall.REFUND.method, {"transactionCode": transactionCode, "transactionId": transactionId});
-    return true;
-  }
+  Future<bool> lastTransaction() => _invoke(PaymentTypeCall.LAST_TRANSACTION.method);
 
-  Future<bool> readNfc(idEvento) async {
-    await channel.invokeMethod(PaymentTypeCall.READ_NFC.method, {"idEvento": idEvento});
-    return true;
-  }
+  Future<bool> refund({
+    required String transactionCode,
+    required String transactionId,
+  }) =>
+      _invoke(PaymentTypeCall.REFUND.method, {
+        "transactionCode": transactionCode,
+        "transactionId": transactionId,
+      });
 
-  Future<bool> writeNfc(valor, nome, cpf, numeroTag, celular, aberto, idEvento) async {
-    await channel.invokeMethod(PaymentTypeCall.WRITE_NFC.method, {"valor": valor, "nome": nome, "cpf": cpf, "numeroTag": numeroTag, "celular": celular, "aberto": aberto, "idEvento": idEvento});
-    return true;
-  }
+  Future<bool> readNfc(dynamic idEvento) => _invoke(PaymentTypeCall.READ_NFC.method, {"idEvento": idEvento});
 
-  Future<bool> reWriteNfc(valor, idEvento) async {
-    await channel.invokeMethod(PaymentTypeCall.REWRITE_NFC.method, {"valor": valor, "idEvento": idEvento});
-    return true;
-  }
+  Future<bool> writeNfc(dynamic valor, dynamic nome, dynamic cpf, dynamic numeroTag, dynamic celular, dynamic aberto, dynamic idEvento) => _invoke(PaymentTypeCall.WRITE_NFC.method, {
+        "valor": valor,
+        "nome": nome,
+        "cpf": cpf,
+        "numeroTag": numeroTag,
+        "celular": celular,
+        "aberto": aberto,
+        "idEvento": idEvento,
+      });
 
-  Future<bool> refundNfc(valor, idEvento) async {
-    await channel.invokeMethod(PaymentTypeCall.REFUND_NFC.method, {"valor": valor, "idEvento": idEvento});
-    return true;
-  }
+  Future<bool> reWriteNfc(dynamic valor, dynamic idEvento) => _invoke(PaymentTypeCall.REWRITE_NFC.method, {"valor": valor, "idEvento": idEvento});
 
-  Future<bool> formatNfc() async {
-    await channel.invokeMethod(PaymentTypeCall.FORMAT_NFC.method);
-    return true;
-  }
+  Future<bool> refundNfc(dynamic valor, dynamic idEvento) => _invoke(PaymentTypeCall.REFUND_NFC.method, {"valor": valor, "idEvento": idEvento});
 
-  Future<bool> debitNfc(idEvento, valor) async {
-    await channel.invokeMethod(PaymentTypeCall.DEBIT_NFC.method, {"idEvento": idEvento, "valor": valor});
-    return true;
-  }
+  Future<bool> formatNfc() => _invoke(PaymentTypeCall.FORMAT_NFC.method);
+
+  Future<bool> debitNfc(dynamic idEvento, dynamic valor) => _invoke(PaymentTypeCall.DEBIT_NFC.method, {"idEvento": idEvento, "valor": valor});
 
   Future<dynamic> _callHandler(MethodCall call) async {
     switch (call.method.handler) {
       case PaymentTypeHandler.ON_TRANSACTION_SUCCESS:
-        {
-          nfcHandler.onTransactionSuccess();
-        }
+        _nfcHandler.onTransactionSuccess();
         break;
       case PaymentTypeHandler.ON_ERROR:
-        {
-          nfcHandler.onError(call.arguments);
-        }
+        _nfcHandler.onError(call.arguments);
         break;
       case PaymentTypeHandler.ON_MESSAGE:
-        {
-          nfcHandler.onMessage(call.arguments);
-        }
+        _nfcHandler.onMessage(call.arguments);
         break;
       case PaymentTypeHandler.ON_LOADING:
-        {
-          nfcHandler.onLoading(call.arguments);
-        }
+        _nfcHandler.onLoading(call.arguments);
         break;
       case PaymentTypeHandler.WRITE_TO_FILE:
-        {
-          nfcHandler.writeToFile(transactionCode: call.arguments['transactionCode'], transactionId: call.arguments['transactionId']);
-        }
+        _nfcHandler.writeToFile(
+          transactionCode: call.arguments['transactionCode'],
+          transactionId: call.arguments['transactionId'],
+        );
         break;
       case PaymentTypeHandler.ON_ABORTED_SUCCESSFULLY:
-        {
-          nfcHandler.onAbortedSuccessfully();
-        }
+        _nfcHandler.onAbortedSuccessfully();
         break;
       case PaymentTypeHandler.DISPOSE_DIALOG:
-        {
-          nfcHandler.disposeDialog();
-        }
+        _nfcHandler.disposeDialog();
         break;
       case PaymentTypeHandler.ACTIVE_DIALOG:
-        {
-          nfcHandler.onActivationDialog();
-        }
+        _nfcHandler.onActivationDialog();
         break;
       case PaymentTypeHandler.ON_AUTH_PROGRESS:
-        {
-          nfcHandler.onAuthProgress(call.arguments);
-        }
+        _nfcHandler.onAuthProgress(call.arguments);
         break;
-
       case PaymentTypeHandler.ON_TRANSACTION_INFO:
-        {
-          nfcHandler.onTransactionInfo(transactionCode: call.arguments['transactionCode'], transactionId: call.arguments['transactionId']);
-        }
+        _nfcHandler.onTransactionInfo(
+          transactionCode: call.arguments['transactionCode'],
+          transactionId: call.arguments['transactionId'],
+        );
         break;
-
       case PaymentTypeHandler.SHOW_SUCCESS:
-        {
-          nfcHandler.showSuccess(call.arguments);
-        }
+        _nfcHandler.showSuccess(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_SUCCESS_WRITE:
-        {
-          nfcHandler.showSuccessWrite(call.arguments);
-        }
+        _nfcHandler.showSuccessWrite(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_SUCCESS_RE_WRITE:
-        {
-          nfcHandler.showSuccessReWrite(call.arguments);
-        }
+        _nfcHandler.showSuccessReWrite(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_SUCCESS_DEBIT_NFC:
-        {
-          nfcHandler.showSuccessDebitNfc(call.arguments);
-        }
+        _nfcHandler.showSuccessDebitNfc(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_SUCCESS_REFUND_NFC:
-        {
-          nfcHandler.showSuccessRefundNfc(call.arguments);
-        }
+        _nfcHandler.showSuccessRefundNfc(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_SUCCESS_FORMAT:
-        {
-          nfcHandler.showSuccessFormat(call.arguments);
-        }
+        _nfcHandler.showSuccessFormat(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_ERROR_READ:
-        {
-          nfcHandler.showErrorRead(call.arguments);
-        }
+        _nfcHandler.showErrorRead(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_ERROR_WRITE:
-        {
-          nfcHandler.showErrorWrite(call.arguments);
-        }
+        _nfcHandler.showErrorWrite(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_ERROR_RE_WRITE:
-        {
-          nfcHandler.showErrorReWrite(call.arguments);
-        }
+        _nfcHandler.showErrorReWrite(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_ERROR_FORMAT:
-        {
-          nfcHandler.showErrorFormat(call.arguments);
-        }
+        _nfcHandler.showErrorFormat(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_ERROR_DEBIT_NFC:
-        {
-          nfcHandler.showErrorDebitNfc(call.arguments);
-        }
+        _nfcHandler.showErrorDebitNfc(call.arguments);
         break;
-
       case PaymentTypeHandler.SHOW_ERROR_REFUND_NFC:
-        {
-          nfcHandler.showErrorRefundNfc(call.arguments);
-        }
+        _nfcHandler.showErrorRefundNfc(call.arguments);
         break;
-
       default:
         throw "METHOD NOT IMPLEMENTED";
     }
