@@ -1,8 +1,11 @@
+// ignore_for_file: public_member_api_docs, sort_constructors_first
 // ignore_for_file: constant_identifier_names
+import 'dart:developer';
+
 import 'package:check_licence_tech/check_licence_tech.dart';
 import 'package:flutter/services.dart';
-import 'package:pagseguro_payment_tech/licence/constants/licence_constants.dart';
 
+import 'package:pagseguro_payment_tech/licence/constants/licence_constants.dart';
 import 'package:pagseguro_payment_tech/payments/handler/payment_handler.dart';
 import 'package:pagseguro_payment_tech/payments/utils/payment_types.dart';
 
@@ -10,11 +13,12 @@ import 'package:pagseguro_payment_tech/payments/utils/payment_types.dart';
 
 final class Payment {
   final MethodChannel channel;
-  final PaymentHandler paymentHandler;
+  PaymentHandler paymentHandler;
   final String licenceKey;
 
-  bool _isValidLicence = false;
-  final CheckLicenceTech _licence = CheckLicenceTech.instance();
+  // Cache da instância criada
+  static Payment? _instance;
+  static bool _isLicenceValidated = false;
 
   Payment._({
     required this.channel,
@@ -28,18 +32,33 @@ final class Payment {
     required PaymentHandler paymentHandler,
     required String licenceKey,
   }) async {
+    // Se já existe instância e licença validada, retorna ela diretamente
+    if (_instance != null && _isLicenceValidated) {
+      return _instance!;
+    }
+
+    // Cria nova instância
     final payment = Payment._(
       channel: channel,
       paymentHandler: paymentHandler,
       licenceKey: licenceKey,
     );
 
-    final valid = await payment._checkLicence();
-    if (!valid) {
+    _isLicenceValidated = await payment._checkLicence();
+
+    if (!_isLicenceValidated) {
+      // Limpa cache pois licença inválida
+      _instance = null;
+      _isLicenceValidated = false;
       throw Exception('Invalid licence key. Please check your licence key.');
     }
-    payment._isValidLicence = true;
+
+    // Salva instância e estado da licença validada
+    _instance = payment;
+    _isLicenceValidated = true;
+
     payment.channel.setMethodCallHandler(payment._callHandler);
+
     return payment;
   }
 
@@ -47,16 +66,32 @@ final class Payment {
     if (licenceKey.isEmpty) {
       return false;
     }
-    return await _licence.checkLicence(
-      licenceKey,
-      url: licenceCheck,
-    );
+    try {
+      final _licence = CheckLicenceTech.instance();
+      final result = await _licence.checkLicence(
+        licenceKey,
+        url: licenceCheck,
+      );
+      return result;
+    } catch (e) {
+      log('Error checking licence: $e');
+      return false;
+    }
   }
 
   void _ensureLicence() {
-    if (!_isValidLicence) {
+    if (!_isLicenceValidated) {
       throw Exception('Invalid licence key. Please check your licence key.');
     }
+  }
+
+  void setHandler(PaymentHandler handler) {
+    if (_instance == null) {
+      throw Exception('Payment instance not initialized. Call Payment.create() first.');
+    }
+
+    _instance?.paymentHandler = handler;
+    _instance?.channel.setMethodCallHandler(_instance?._callHandler);
   }
 
   //Create external functions from invoke methodChannel

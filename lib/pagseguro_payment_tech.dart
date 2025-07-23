@@ -37,7 +37,7 @@ class PagseguroPaymentTech {
   }) async {
     try {
       if (_payment != null) {
-        throw Exception("Payment já inicializado.");
+        return _payment!;
       }
       _payment = await Payment.create(channel: _channel, paymentHandler: handler, licenceKey: licenceKey);
       return _payment!;
@@ -54,7 +54,7 @@ class PagseguroPaymentTech {
   }) async {
     try {
       if (_nfc != null) {
-        throw Exception("NFC já inicializado.");
+        return _nfc!;
       }
       _nfc = await Nfc.internal(channel: _channel, nfcHandler: handler, licenceKey: licenceKey);
       return _nfc!;
