@@ -1,3 +1,7 @@
+## 1.1.0
+
+- Fix checkLicence
+
 ## 1.0.6
 
 - First release
