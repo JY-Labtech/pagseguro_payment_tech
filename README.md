@@ -87,7 +87,7 @@ AndroidManifest.xml dentro da sua Activity principal.
 
 ### # Build.gradle
 
-#### => Wrapper v1.29.5
+#### => Wrapper v1.30.51
 
 Em seu build.gradle a nivel do app, a propriedade `minSdkVersion` precisa ser level 23. Recurso este exigido pela versão do plugpagservice da PagSeguro.
 
