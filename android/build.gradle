@@ -1,16 +1,14 @@
-group 'br.com.jylabtech.pagseguro_payment_tech'
-version '1.0'
+group = "br.com.jylabtech.pagseguro_payment_tech"
+version = "1.0"
 
 buildscript {
-    ext.kotlin_version = '1.6.10'
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.1.0'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath("com.android.tools.build:gradle:8.1.0")
     }
 }
 
@@ -24,27 +22,42 @@ rootProject.allprojects {
     }
 }
 
-apply plugin: 'com.android.library'
+apply plugin: "com.android.library"
 
 android {
-    compileSdkVersion 31
-
-    lintOptions {
-        disable 'InvalidPackage'
+    if (project.android.hasProperty("namespace")) {
+        namespace = "br.com.jylabtech.pagseguro_payment_tech"
     }
 
+    compileSdk = 34
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     defaultConfig {
-        minSdkVersion 23
+        minSdk = 23
+    }
+
+    dependencies {
+        testImplementation("junit:junit:4.13.2")
+        testImplementation("org.mockito:mockito-core:5.0.0")
+    }
+
+    testOptions {
+        unitTests.all {
+            testLogging {
+               events "passed", "skipped", "failed", "standardOut", "standardError"
+               outputs.upToDateWhen {false}
+               showStandardStreams = true
+            }
+        }
     }
 }
 
 dependencies{
-    implementation 'br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.29.5'
+    implementation 'br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.30.51'
     implementation 'com.google.dagger:dagger:2.38.1'
     annotationProcessor "com.google.dagger:dagger-compiler:2.38.1"
     implementation 'io.reactivex.rxjava2:rxjava:2.1.16'
@@ -52,6 +65,4 @@ dependencies{
     implementation 'com.hannesdorfmann.mosby:mvp:2.0.1'
     implementation 'com.android.support:design:28.0.0'
     implementation 'com.google.code.gson:gson:2.10.1'
-
-    // implementation group: 'com.google.guava', name: 'guava', version: '26.0-android'
 }
