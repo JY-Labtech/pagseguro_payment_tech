@@ -1,6 +1,7 @@
 ## 1.1.0
 
 - Fix checkLicence
+- Update Wrapper to version 1.30.51
 
 ## 1.0.6
 
