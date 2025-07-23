@@ -1,3 +1,7 @@
+## 1.1.0+1
+
+- Add method setHandler to NFC
+
 ## 1.1.0
 
 - Fix checkLicence
