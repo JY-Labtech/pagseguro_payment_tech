@@ -1,4 +1,6 @@
 // ignore_for_file: constant_identifier_names
+import 'dart:developer';
+
 import 'package:check_licence_tech/check_licence_tech.dart';
 import 'package:flutter/services.dart';
 import 'package:pagseguro_payment_tech/licence/constants/licence_constants.dart';
@@ -9,11 +11,12 @@ const CHANNEL_NFC_NAME = "pagseguro_payment_tech";
 
 final class Nfc {
   final MethodChannel _channel;
-  final NfcHandler _nfcHandler;
+  NfcHandler _nfcHandler;
   final String _licenceKey;
-  final CheckLicenceTech _licence = CheckLicenceTech.instance();
 
-  bool _isValidLicence = false;
+  // Cache da instância criada
+  static Nfc? _instance;
+  static bool _isLicenceValidated = false;
 
   Nfc._internal({
     required MethodChannel channel,
@@ -29,29 +32,55 @@ final class Nfc {
     required NfcHandler nfcHandler,
     required String licenceKey,
   }) async {
+    // Se já existe instância e licença validada, retorna ela diretamente
+    if (_instance != null && _isLicenceValidated) {
+      return _instance!;
+    }
+
     final nfc = Nfc._internal(
       channel: channel,
       nfcHandler: nfcHandler,
       licenceKey: licenceKey,
     );
-    await nfc._checkLicence();
-    if (!nfc._isValidLicence) {
+    _isLicenceValidated = await nfc._checkLicence();
+    if (!_isLicenceValidated) {
+      _instance = null; // Limpa a instância se a licença não for válida
+      _isLicenceValidated = false;
       throw Exception('Invalid licence key. Please check your licence key.');
     }
+    _instance = nfc;
+    _isLicenceValidated = true;
     nfc._channel.setMethodCallHandler(nfc._callHandler);
     return nfc;
+  }
+
+  void setHandler(NfcHandler handler) {
+    if (_instance == null) {
+      throw Exception('Payment instance not initialized. Call Payment.create() first.');
+    }
+
+    _instance?._nfcHandler = handler;
+    _instance?._channel.setMethodCallHandler(_instance?._callHandler);
   }
 
   void closeMethodCallHandler() {
     _channel.setMethodCallHandler(null);
   }
 
-  Future<void> _checkLicence() async {
-    if (_isValidLicence) return;
-    if (_licenceKey.isEmpty) throw Exception('Licence key is empty.');
-    _isValidLicence = await _licence.checkLicence(_licenceKey, url: licenceCheck);
-    if (!_isValidLicence) {
-      throw Exception('Invalid licence key. Please check your licence key.');
+  Future<bool> _checkLicence() async {
+    if (_licenceKey.isEmpty) {
+      return false;
+    }
+    try {
+      final _licence = CheckLicenceTech.instance();
+      final result = await _licence.checkLicence(
+        _licenceKey,
+        url: licenceCheck,
+      );
+      return result;
+    } catch (e) {
+      log('Error checking licence: $e');
+      return false;
     }
   }
 
