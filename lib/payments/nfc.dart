@@ -85,7 +85,9 @@ final class Nfc {
   }
 
   Future<bool> _invoke(String method, [Map<String, dynamic>? arguments]) async {
-    await _checkLicence();
+    if (_instance == null) {
+      throw Exception('Payment instance not initialized. Call Payment.create() first.');
+    }
     await _channel.invokeMethod(method, arguments);
     return true;
   }
