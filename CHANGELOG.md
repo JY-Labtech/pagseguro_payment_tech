@@ -1,3 +1,7 @@
+## 1.1.0+3
+
+- Replace instance() to I
+
 ## 1.1.0+2
 
 - Update checkLicence version

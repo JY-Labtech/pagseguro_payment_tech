@@ -22,7 +22,7 @@ class _PaymentPageState extends State<PaymentPage> {
   @override
   void initState() {
     //Inicializar a classe handle para escutar os métodos e retornos da pagseguro
-    PagseguroPaymentTech.instance.initPayment(handler: controller, licenceKey: '');
+    PagseguroPaymentTech.I.initPayment(handler: controller, licenceKey: '');
     super.initState();
   }
 
@@ -65,7 +65,7 @@ class _PaymentPageState extends State<PaymentPage> {
                           controller.clickPayment = true;
                         });
                         //Chamar o método de pagamento para transação no débito
-                        PagseguroPaymentTech.instance.payment.debitPayment(controller.saleValue);
+                        PagseguroPaymentTech.I.payment.debitPayment(controller.saleValue);
                       }
                     : null,
               ),
@@ -78,7 +78,7 @@ class _PaymentPageState extends State<PaymentPage> {
                           controller.clickPayment = true;
                         });
                         //Chamar o método de pagamento para transação no crédito a vista
-                        PagseguroPaymentTech.instance.payment.creditPayment(controller.saleValue);
+                        PagseguroPaymentTech.I.payment.creditPayment(controller.saleValue);
                       }
                     : null,
               ),
@@ -91,7 +91,7 @@ class _PaymentPageState extends State<PaymentPage> {
                           controller.clickPayment = true;
                         });
                         //Chamar o método de pagamento para transação no crédito parcelado em 2x
-                        PagseguroPaymentTech.instance.payment.creditPaymentParc(controller.saleValue, 2);
+                        PagseguroPaymentTech.I.payment.creditPaymentParc(controller.saleValue, 2);
                       }
                     : null,
               ),
@@ -104,7 +104,7 @@ class _PaymentPageState extends State<PaymentPage> {
                           controller.clickPayment = true;
                         });
                         //Chamar o método de pagamento para transação no voucher
-                        PagseguroPaymentTech.instance.payment.voucherPayment(controller.saleValue);
+                        PagseguroPaymentTech.I.payment.voucherPayment(controller.saleValue);
                       }
                     : null,
               ),
@@ -117,7 +117,7 @@ class _PaymentPageState extends State<PaymentPage> {
                           controller.clickPayment = true;
                         });
                         //Chamar o método de pagamento para transação no pix
-                        PagseguroPaymentTech.instance.payment.pixPayment(controller.saleValue);
+                        PagseguroPaymentTech.I.payment.pixPayment(controller.saleValue);
                       }
                     : null,
               ),
@@ -129,7 +129,7 @@ class _PaymentPageState extends State<PaymentPage> {
                     controller.clickPayment = true;
                   });
                   //Chamar o método para ativar o terminal (pinpad)
-                  PagseguroPaymentTech.instance.payment.activePinpad('');
+                  PagseguroPaymentTech.I.payment.activePinpad('');
                 },
               ),
             ],
@@ -142,7 +142,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 ? () {
                     controller.setSaleValue(0.0);
                     //Chamar o método para abortar uma transação em andamento (processamento)
-                    PagseguroPaymentTech.instance.payment.abortTransaction();
+                    PagseguroPaymentTech.I.payment.abortTransaction();
                   }
                 : null,
             child: const Text("Cancelar Operação"),
@@ -154,7 +154,7 @@ class _PaymentPageState extends State<PaymentPage> {
             onPressed: () {
               Future.delayed(const Duration(seconds: 3)).then((value) => setState(() {}));
               //Chamar o método para retornar a última transação realizada
-              PagseguroPaymentTech.instance.payment.lastTransaction();
+              PagseguroPaymentTech.I.payment.lastTransaction();
             },
             child: const Text("Ultima transação"),
           ),
@@ -188,7 +188,7 @@ class _PaymentPageState extends State<PaymentPage> {
               //Chamar o método para imprimir um widget
               PrintRenderWidget.print(
                 context,
-                pagseguroPaymentInstance: PagseguroPaymentTech.instance,
+                pagseguroPaymentInstance: PagseguroPaymentTech.I,
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: list.length,
@@ -204,7 +204,7 @@ class _PaymentPageState extends State<PaymentPage> {
             ElevatedButton(
               onPressed: () {
                 //Chamar o método para estornar uma transação
-                PagseguroPaymentTech.instance.payment.refund(transactionCode: controller.transactionCode, transactionId: controller.transactionId);
+                PagseguroPaymentTech.I.payment.refund(transactionCode: controller.transactionCode, transactionId: controller.transactionId);
               },
               child: const Text("Estornar transação"),
             ),
