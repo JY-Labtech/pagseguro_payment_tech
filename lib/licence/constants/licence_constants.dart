@@ -1,3 +1,5 @@
+// ignore_for_file: constant_identifier_names
+
 const String licenceCheck = 'aHR0cHM6Ly9wb3MtcGF5bWVudHMtYXBpLTU3NzQ2NDIzNTQwOC5zb3V0aGFtZXJpY2EtZWFzdDEucnVuLmFwcC9wb3MtcGF5bWVudHMvbGljZW5jZS9jaGVjaw==';
 //https://pos-payments-api-577464235408.southamerica-east1.run.app/pos-payments/licence/check
 

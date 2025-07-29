@@ -12,11 +12,12 @@ export 'package:pagseguro_payment_tech/payments/print_render_widget.dart';
 const String CHANNEL_NAME = 'pagseguro_payment_tech';
 
 class PagseguroPaymentTech {
-  static final PagseguroPaymentTech _instance = PagseguroPaymentTech._internal();
+  static PagseguroPaymentTech? _instance;
 
-  factory PagseguroPaymentTech() => _instance;
-
-  static PagseguroPaymentTech get instance => _instance;
+  static PagseguroPaymentTech get I {
+    _instance ??= PagseguroPaymentTech._internal();
+    return _instance!;
+  }
 
   late final MethodChannel _channel;
   Payment? _payment;
