@@ -1,3 +1,7 @@
+## 1.1.1
+
+- Add method wipe licence local database
+
 ## 1.1.0+3
 
 - Replace instance() to I

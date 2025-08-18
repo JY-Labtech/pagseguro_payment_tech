@@ -226,6 +226,11 @@ public class PaymentsPresenter {
           throwable -> mFragment.onError(throwable.getMessage())
         );
   }
+
+  public String getSerialNumber() {
+    return mUseCase.getSerialNumber();
+  }
+  
   public void dispose() {
     if (mSubscribe != null) {
       mSubscribe.dispose();

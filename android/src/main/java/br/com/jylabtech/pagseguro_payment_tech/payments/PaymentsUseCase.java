@@ -276,5 +276,9 @@ public class PaymentsUseCase {
     }
   }
 
+  public String getSerialNumber() {
+    return mPlugPag.getSerialNumber();
+  }
+
 
 }

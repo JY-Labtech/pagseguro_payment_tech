@@ -30,6 +30,7 @@ class PagseguroPaymentTech {
   final _check = CheckLicenceTech.instance();
 
   Future<String> getSerialNumber() async => await _check.getSerialNumber();
+  Future<bool> wipeLicenceLocal() async => await _check.wipeLicence();
 
   /// Inicializa o pagamento e registra o handler
   Future<Payment> initPayment({

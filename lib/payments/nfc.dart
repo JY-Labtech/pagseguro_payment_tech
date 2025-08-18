@@ -5,6 +5,7 @@ import 'package:check_licence_tech/check_licence_tech.dart';
 import 'package:flutter/services.dart';
 import 'package:pagseguro_payment_tech/licence/constants/licence_constants.dart';
 import 'package:pagseguro_payment_tech/payments/handler/nfc_handler.dart';
+import 'package:pagseguro_payment_tech/payments/payment.dart';
 import 'package:pagseguro_payment_tech/payments/utils/payment_types.dart';
 
 const CHANNEL_NFC_NAME = "pagseguro_payment_tech";
@@ -31,6 +32,7 @@ final class Nfc {
     required MethodChannel channel,
     required NfcHandler nfcHandler,
     required String licenceKey,
+    Payment? payment,
   }) async {
     // Se já existe instância e licença validada, retorna ela diretamente
     if (_instance != null && _isLicenceValidated) {
@@ -42,7 +44,13 @@ final class Nfc {
       nfcHandler: nfcHandler,
       licenceKey: licenceKey,
     );
-    _isLicenceValidated = await nfc._checkLicence();
+
+    if (payment != null && payment.isActivatedLicence) {
+      _isLicenceValidated = true;
+    } else {
+      _isLicenceValidated = await nfc._checkLicence();
+    }
+
     if (!_isLicenceValidated) {
       _instance = null; // Limpa a instância se a licença não for válida
       _isLicenceValidated = false;
