@@ -43,6 +43,8 @@ public class PagSeguroPayment {
   private static final String PINPAD_AUTHENTICATED = "paymentIsAuthenticated";
   private static final String REBOOT_DEVICE = "paymentReboot";
   private static final String BEEP_PAYMENT = "paymentBeep";
+  private static final String GET_SERIAL_NUMBER = "paymentGetSerialNumber";
+
 
   //NFC
   private static final String WRITE_NFC = "paymentWriteNfc";
@@ -117,6 +119,12 @@ public class PagSeguroPayment {
     if (call.method.equals(BEEP_PAYMENT)) {
       this.payment.beep();
       result.success(true);
+    }
+
+    if (call.method.equals(GET_SERIAL_NUMBER)) {
+      String serialNumber = this.payment.getSerialNumber();
+      result.success(serialNumber);
+      return;
     }
 
     if (call.method.equals(PAYMENT_DEBIT)) {

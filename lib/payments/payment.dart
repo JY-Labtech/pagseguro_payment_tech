@@ -20,6 +20,8 @@ final class Payment {
   static Payment? _instance;
   static bool _isLicenceValidated = false;
 
+  bool get isActivatedLicence => _isLicenceValidated;
+
   Payment._({
     required this.channel,
     required this.paymentHandler,
@@ -302,6 +304,17 @@ final class Payment {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  //GetSerialNumber
+  Future<String> getSerialNumber() async {
+    _ensureLicence();
+    try {
+      final result = await channel.invokeMethod(PaymentTypeCall.GET_SERIAL_NUMBER.method);
+      return result as String;
+    } catch (_) {
+      return '';
     }
   }
 
