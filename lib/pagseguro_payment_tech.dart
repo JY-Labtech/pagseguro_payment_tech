@@ -58,7 +58,12 @@ class PagseguroPaymentTech {
       if (_nfc != null) {
         return _nfc!;
       }
-      _nfc = await Nfc.internal(channel: _channel, nfcHandler: handler, licenceKey: licenceKey);
+      _nfc = await Nfc.internal(
+        channel: _channel,
+        nfcHandler: handler,
+        licenceKey: licenceKey,
+        payment: _payment,
+      );
       return _nfc!;
     } catch (e) {
       print('Error initializing payment: $e');
