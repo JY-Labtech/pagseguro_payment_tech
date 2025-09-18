@@ -19,6 +19,7 @@ import br.com.jylabtech.pagseguro_payment_tech.user.usecase.NewUserUseCase;
 import br.com.jylabtech.pagseguro_payment_tech.user.usecase.RefundUserUseCase;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
+import br.com.jylabtech.pagseguro_payment_tech.BuildConfig;
 public class PagSeguroPayment {
   final PlugPag plugPag;
   final MethodChannel mChannel;
@@ -61,15 +62,19 @@ public class PagSeguroPayment {
   private static final String PRINTER_BASIC = "paymentPrinterBasic";
   private static final String PRINTER_FILE_PATH = "paymentPrinterFilePath";
 
+  private Context context;
+
   public PagSeguroPayment(Context context, MethodChannel channel) {
+    this.context = context;
     PlugPag instancePlugPag = new PlugPag(context);
     PlugPagCustomPrinterLayout customDialog = new PlugPagCustomPrinterLayout();
     customDialog.setMaxTimeShowPopup(30);
     instancePlugPag.setPlugPagCustomPrinterLayout(customDialog);
     this.plugPag = instancePlugPag;
     this.mChannel = channel;
+
   }
-  public void initPayment(MethodCall call, MethodChannel.Result result) {
+  public void initPayment(MethodCall call, MethodChannel.Result result) throws Exception {
     if(call.method.equals(PRINTER_FILE)) {
       PrinterPresenter printerPresenter = new PrinterPresenter(this.plugPag, this.mChannel);
       String filePath = call.argument("path");
@@ -94,8 +99,17 @@ public class PagSeguroPayment {
       printerPresenter.printerByFilePath(filePath);
     }
 
+    String licenceKeyLocal = BuildConfig.LICENCE_KEY;
+    String licenceInternalKey = BuildConfig.LICENCE_INTERNAL_KEY;
+
+    boolean resultLicence = this.payment.checkValidLicence(licenceKeyLocal, licenceInternalKey);
+    Log.d("print", "*resultLicence: " + resultLicence);
+    if(!resultLicence) {
+      throw new Exception("Sua licença não foi ativada.");
+    }
+
     if (this.payment == null) {
-      this.payment = new PaymentsPresenter(this.plugPag, this.mChannel);
+      this.payment = new PaymentsPresenter(this.plugPag, this.mChannel, this.context);
     }
 
     mUseCase = new NFCUseCase(plugPag);

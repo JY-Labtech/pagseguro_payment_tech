@@ -1,4 +1,11 @@
 package br.com.jylabtech.pagseguro_payment_tech.payments;
+import android.content.Context;
+import android.util.Log;
+
+import com.google.gson.Gson;
+
+import br.com.jylabtech.pagseguro_payment_tech.licence.CheckLicenceTech;
+import br.com.jylabtech.pagseguro_payment_tech.licence.LicenceResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagActivationData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagCustomPrinterLayout;
@@ -25,9 +32,14 @@ public class PaymentsUseCase {
   private final int INSTALLMENT_TYPE_A_VISTA = 1;
   private final int INSTALLMENT_TYPE_PARC_VENDEDOR = 2;
   private final int INSTALLMENT_TYPE_PARC_COMPRADOR = 3;
+
+  private CheckLicenceTech licenceTech;
+  private PaymentsFragment mFragment;
   
-	public PaymentsUseCase(PlugPag plugPag) {
+	public PaymentsUseCase(PlugPag plugPag, Context context, PaymentsFragment fragmemnt) {
     mPlugPag = plugPag;
+    this.licenceTech = new CheckLicenceTech(context);
+    this.mFragment = fragmemnt;
   }
 
   public Observable<ActionResult> doCreditPayment(
@@ -36,7 +48,8 @@ public class PaymentsUseCase {
     Boolean printReceipt, 
     Boolean partialPay, 
     Boolean isCarne
-  ) {
+  ) throws Exception {
+    isValidLicence();
     return doPayment(
       new PlugPagPaymentData(
         TYPE_CREDITO,
@@ -59,7 +72,8 @@ public class PaymentsUseCase {
     Boolean printReceipt, 
     Boolean partialPay, 
     Boolean isCarne    
-  ) {
+  ) throws Exception {
+    isValidLicence();
     return doPayment(
       new PlugPagPaymentData(
         TYPE_CREDITO,
@@ -80,7 +94,8 @@ public class PaymentsUseCase {
     Boolean printReceipt, 
     Boolean partialPay, 
     Boolean isCarne
-  ) {
+  ) throws Exception {
+    isValidLicence();
     return doPayment(
       new PlugPagPaymentData(
         TYPE_DEBITO,
@@ -101,7 +116,8 @@ public class PaymentsUseCase {
     Boolean printReceipt, 
     Boolean partialPay, 
     Boolean isCarne
-  ) {
+  ) throws Exception {
+    isValidLicence();
     return doPayment(
       new PlugPagPaymentData(
         TYPE_VOUCHER,
@@ -122,7 +138,8 @@ public class PaymentsUseCase {
     Boolean printReceipt, 
     Boolean partialPay, 
     Boolean isCarne
-  ) {
+  ) throws Exception {
+    isValidLicence();
     return doPayment(
       new PlugPagPaymentData(
         TYPE_PIX,
@@ -146,7 +163,8 @@ public class PaymentsUseCase {
     Boolean printReceipt, 
     Boolean partialPay, 
     Boolean isCarne    
-  ) {
+  ) throws Exception {
+    isValidLicence();
     return doPayment(
       new PlugPagPaymentData(
         type,
@@ -206,10 +224,12 @@ public class PaymentsUseCase {
       emitter.onNext(result);
     });
   }
-  public Completable abort() {
-    return Completable.create(emitter -> mPlugPag.abort());
+  public Completable abort() throws Exception {
+    isValidLicence();
+      return Completable.create(emitter -> mPlugPag.abort());
   }
-  public Observable<Boolean> isAuthenticated() {
+  public Observable<Boolean> isAuthenticated() throws Exception {
+    isValidLicence();
     return Observable.create(emitter -> {
       emitter.onNext(mPlugPag.isAuthenticated());
       emitter.onComplete();
@@ -217,7 +237,8 @@ public class PaymentsUseCase {
   }
   public Observable<ActionResult> initializeAndActivatePinpad(
     String activationCode
-  ) {
+  ) throws Exception {
+    isValidLicence();
     PlugPagCustomPrinterLayout customDialog = new PlugPagCustomPrinterLayout();
     customDialog.setMaxTimeShowPopup(30);
     mPlugPag.setPlugPagCustomPrinterLayout(customDialog);
@@ -242,7 +263,7 @@ public class PaymentsUseCase {
   public Observable<ActionResult> doRefund(
     String transactionCode,
     String transactionId
-  ) {
+  )  {
     return Observable.create(emitter -> {
       ActionResult actionResult = new ActionResult();
       setListener(emitter, actionResult);
@@ -252,7 +273,8 @@ public class PaymentsUseCase {
       sendResponse(emitter, result, actionResult);
     });
   }
-  public Observable<ActionResult> getLastTransaction() {
+  public Observable<ActionResult> getLastTransaction() throws Exception {
+    isValidLicence();
     return Observable.create(emitter -> {
       ActionResult actionResult = new ActionResult();
       PlugPagTransactionResult result = mPlugPag.getLastApprovedTransaction();
@@ -278,6 +300,50 @@ public class PaymentsUseCase {
 
   public String getSerialNumber() {
     return mPlugPag.getSerialNumber();
+  }
+
+  public boolean checkValidLicence(String licenceKey, String licenceInternalKey) throws Exception {
+    boolean aux = false;
+    ActionResult result = new ActionResult();
+    result.setMethod("licence");
+    this.mFragment.onMessage("Verificando licença");
+    LicenceResult resultLicence =  licenceTech.validateLicence(licenceKey, licenceInternalKey);
+    Log.d("print", "****resultLicence: " + resultLicence);
+
+
+    if(resultLicence.getResult() == 0) {
+      aux = true;
+      this.mFragment.onMessage("Licença ativada");
+      result.setResult(0);
+      result.setMessage("Licença ativada com sucesso");
+      String response = new Gson().toJson(result);
+      this.mFragment.onFinishedResponse(response);
+    }
+
+    if(!aux) {
+      String errorMessage = resultLicence.getErrorMessage();
+      if(errorMessage == null || errorMessage.isEmpty()) {
+        errorMessage = "Licença não ativada";
+      }
+      this.mFragment.onMessage(errorMessage);
+      result.setResult(999999);
+      result.setErrorMessage(errorMessage);
+      this.mFragment.onError(errorMessage);
+      String response = new Gson().toJson(result);
+      this.mFragment.onFinishedResponse(response);
+      throw new Exception("Licença não ativada, consulte o suporte do plugin.");
+    }
+
+    return aux;
+  }
+
+  private boolean isValidLicence() throws Exception {
+    boolean result = licenceTech.validateExistsLicence();
+    if(result) {
+      return true;
+    }
+
+    throw new Exception("Licença inválida ou não foi inicializada!");
   }
 
 
