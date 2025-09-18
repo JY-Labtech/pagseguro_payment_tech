@@ -1,4 +1,5 @@
 package br.com.jylabtech.pagseguro_payment_tech.payments;
+import android.content.Context;
 import android.util.Log;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagEventData;
@@ -19,44 +20,44 @@ public class PaymentsPresenter {
   private Boolean hasAborted = false;
   private int countPassword = 0;
   @Inject
-  public PaymentsPresenter(PlugPag plugPag, MethodChannel channel) {
-    mUseCase = new PaymentsUseCase(plugPag);
+  public PaymentsPresenter(PlugPag plugPag, MethodChannel channel, Context context) {
     mFragment = new PaymentsFragment(channel);
+    mUseCase = new PaymentsUseCase(plugPag, context, this.mFragment);
   }
 
   public void rebootDevice() {mUseCase.rebootDevice();}
 
   public void beep() {mUseCase.beep();}
 
-  public void creditPaymentParc(int value, int type, int parc, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) {
+  public void creditPaymentParc(int value, int type, int parc, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
     doAction(mUseCase.doCreditPaymentParc(value, type, parc, userReference, printReceipt, partialPay, isCarne), value);
   }
 
-  public void creditPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) {
+  public void creditPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
     doAction(mUseCase.doCreditPayment(value, userReference, printReceipt, partialPay, isCarne), value);
   }
 
-  public void doDebitPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) {
+  public void doDebitPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
     doAction(mUseCase.doDebitPayment(value, userReference, printReceipt, partialPay, isCarne), value);
   }
 
-  public void doPixPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) {
+  public void doPixPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
     doAction(mUseCase.doPixPayment(value, userReference, printReceipt, partialPay, isCarne), value);
   }
 
-  public void doVoucherPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) {
+  public void doVoucherPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
     doAction(mUseCase.doVoucherPayment(value, userReference, printReceipt, partialPay, isCarne), value);
   }
 
-  public void doRefund(String transactionCode, String transactionId) {
+  public void doRefund(String transactionCode, String transactionId) throws Exception {
     doAction(mUseCase.doRefund(transactionCode, transactionId), 0);
   }
 
-  public void startPayment(int type, int amount, int installmentType, int installments, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) {
+  public void startPayment(int type, int amount, int installmentType, int installments, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
     doAction(mUseCase.doStartPayment(type, amount, installmentType, installments, userReference, printReceipt, partialPay, isCarne), amount);
   }  
 
-  private void doAction(Observable<ActionResult> action, int value) {
+  private void doAction(Observable<ActionResult> action, int value) throws Exception {
     mSubscribe =
       mUseCase
         .isAuthenticated()
@@ -141,7 +142,7 @@ public class PaymentsPresenter {
       );
     }
   }
-  public void abortTransaction() {
+  public void abortTransaction() throws Exception {
     mSubscribe =
       mUseCase
         .abort()
@@ -149,7 +150,7 @@ public class PaymentsPresenter {
         .observeOn(AndroidSchedulers.mainThread())
         .subscribe();
   }
-  public void activate(String activationCode) {
+  public void activate(String activationCode) throws Exception {
     Log.d("print", "*** ATIVANDO PINPAD: " + activationCode);
     mFragment.onMessage("Ativando terminal");
     mSubscribe =
@@ -178,7 +179,7 @@ public class PaymentsPresenter {
         );
     Log.d("print", "*** FIM ATIVAÇÃO: ");
   }
-  public void isAuthenticate() {
+  public void isAuthenticate() throws Exception {
         mFragment.onMessage("Obtendo status do terminal");
         mSubscribe = mUseCase.isAuthenticated()
                 .observeOn(AndroidSchedulers.mainThread())
@@ -207,7 +208,7 @@ public class PaymentsPresenter {
                         });
         Log.d("print", "*** FIM ATIVAÇÃO: ");
     }
-  public void getLastTransaction() {
+  public void getLastTransaction() throws Exception {
     mSubscribe =
       mUseCase
         .getLastTransaction()
@@ -230,6 +231,10 @@ public class PaymentsPresenter {
   public String getSerialNumber() {
     return mUseCase.getSerialNumber();
   }
+
+    public boolean checkValidLicence(String licenceKey, String licenceInternalKey) throws Exception {
+        return this.mUseCase.checkValidLicence(licenceKey, licenceInternalKey);
+    }
   
   public void dispose() {
     if (mSubscribe != null) {

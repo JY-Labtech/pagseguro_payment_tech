@@ -5,6 +5,26 @@ import com.google.gson.Gson;
 
 public class ActionResult {
 
+    private String errorMessage;
+
+    public void setErrorMessage(String value) {
+        this.errorMessage = value;
+    }
+
+    public String getErrorMessage() {
+        return this.errorMessage;
+    }
+
+    private String method;
+
+    public void setMethod(String value) {
+        this.method = value;
+    }
+
+    public String getMethod() {
+        return this.method;
+    }
+
   int eventCode;
 
   int isBuildResponse = 0;

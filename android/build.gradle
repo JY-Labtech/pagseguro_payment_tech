@@ -2,13 +2,39 @@ group = "br.com.jylabtech.pagseguro_payment_tech"
 version = "1.0"
 
 buildscript {
+    ext {
+        kotlin_version = '1.9.0'
+
+        localProps = new Properties()
+        fileName = 'local.properties'
+        if (project.rootProject.file(fileName).exists()) {
+            localProps.load(new FileInputStream(rootProject.file(fileName)))
+        }
+
+        // Licence Keys
+        licenceKey = System.env.LICENCE_KEY ?: localProps.getProperty("licenceKey") ?: ""
+        licenceInternalKey = System.env.LICENCE_INTERNAL_KEY ?: localProps.getProperty("licenceInternalKey") ?: ""
+
+        if (!licenceKey || licenceKey == "") {
+            throw new GradleException("LicenceKey não encontrado!!")
+        }
+
+        if (!licenceInternalKey || licenceInternalKey == "") {
+            throw new GradleException("LicenceInternalKey não encontrado!!")
+        }
+
+        println "licenceKey: $licenceKey"
+        println "licenceInternalKey: $licenceInternalKey"
+    }
+
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath("com.android.tools.build:gradle:8.1.0")
+        classpath 'com.android.tools.build:gradle:8.7.3'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 
@@ -23,21 +49,43 @@ rootProject.allprojects {
 }
 
 apply plugin: "com.android.library"
+apply plugin: 'kotlin-android'
 
 android {
-    if (project.android.hasProperty("namespace")) {
-        namespace = "br.com.jylabtech.pagseguro_payment_tech"
-    }
+    namespace = "br.com.jylabtech.pagseguro_payment_tech"
 
     compileSdk = 34
 
+    buildFeatures {
+        buildConfig = true
+    }
+
+    lintOptions {
+        disable 'InvalidPackage'
+    }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
     defaultConfig {
         minSdk = 23
+        buildConfigField "String", "LICENCE_KEY", "\"${licenceKey}\""
+        buildConfigField "String", "LICENCE_INTERNAL_KEY", "\"${licenceInternalKey}\""
+    }
+
+    packagingOptions {
+        exclude 'META-INF/api_release.kotlin_module'
+        exclude 'META-INF/client_release.kotlin_module'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
     }
 
     dependencies {
@@ -57,7 +105,6 @@ android {
 }
 
 dependencies{
-    implementation 'br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.30.51'
     implementation 'com.google.dagger:dagger:2.38.1'
     annotationProcessor "com.google.dagger:dagger-compiler:2.38.1"
     implementation 'io.reactivex.rxjava2:rxjava:2.1.16'
@@ -65,4 +112,11 @@ dependencies{
     implementation 'com.hannesdorfmann.mosby:mvp:2.0.1'
     implementation 'com.android.support:design:28.0.0'
     implementation 'com.google.code.gson:gson:2.10.1'
+
+    // Dependencia da PagSeguro
+    implementation 'br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.30.51'
+
+    //Dependencias para módulo de licenças
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha03")
 }
