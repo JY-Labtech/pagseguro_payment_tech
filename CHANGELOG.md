@@ -1,3 +1,19 @@
+## 2.0.0
+
+⚠️ Attention: In this version, there is an important change in the way payments are initialized.
+
+🛠️ What changed:
+
+Breaking Change: The initPayment method no longer requires the licenceKey to be passed as a parameter.
+
+It is now mandatory to define the following fields in local.properties:
+
+licenceKey → main licence key
+
+licenceInternalKey → internal licence key
+
+This means that any code that previously passed licenceKey directly to initPayment will need to be updated.
+
 ## 1.1.2
 
 - Add method wipe licence local database

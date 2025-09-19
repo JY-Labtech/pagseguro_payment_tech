@@ -1,9 +1,5 @@
 // ignore_for_file: constant_identifier_names
-import 'dart:developer';
-
-import 'package:check_licence_tech/check_licence_tech.dart';
 import 'package:flutter/services.dart';
-import 'package:pagseguro_payment_tech/licence/constants/licence_constants.dart';
 import 'package:pagseguro_payment_tech/payments/handler/nfc_handler.dart';
 import 'package:pagseguro_payment_tech/payments/payment.dart';
 import 'package:pagseguro_payment_tech/payments/utils/payment_types.dart';
@@ -13,51 +9,33 @@ const CHANNEL_NFC_NAME = "pagseguro_payment_tech";
 final class Nfc {
   final MethodChannel _channel;
   NfcHandler _nfcHandler;
-  final String _licenceKey;
 
   // Cache da instância criada
   static Nfc? _instance;
-  static bool _isLicenceValidated = false;
 
   Nfc._internal({
     required MethodChannel channel,
     required NfcHandler nfcHandler,
-    required String licenceKey,
   })  : _channel = channel,
-        _nfcHandler = nfcHandler,
-        _licenceKey = licenceKey;
+        _nfcHandler = nfcHandler;
 
   /// Exposto apenas internamente no package
-  static Future<Nfc> internal({
+  static Nfc internal({
     required MethodChannel channel,
     required NfcHandler nfcHandler,
-    required String licenceKey,
     Payment? payment,
-  }) async {
+  }) {
     // Se já existe instância e licença validada, retorna ela diretamente
-    if (_instance != null && _isLicenceValidated) {
+    if (_instance != null) {
       return _instance!;
     }
 
     final nfc = Nfc._internal(
       channel: channel,
       nfcHandler: nfcHandler,
-      licenceKey: licenceKey,
     );
 
-    if (payment != null && payment.isActivatedLicence) {
-      _isLicenceValidated = true;
-    } else {
-      _isLicenceValidated = await nfc._checkLicence();
-    }
-
-    if (!_isLicenceValidated) {
-      _instance = null; // Limpa a instância se a licença não for válida
-      _isLicenceValidated = false;
-      throw Exception('Invalid licence key. Please check your licence key.');
-    }
     _instance = nfc;
-    _isLicenceValidated = true;
     nfc._channel.setMethodCallHandler(nfc._callHandler);
     return nfc;
   }
@@ -73,23 +51,6 @@ final class Nfc {
 
   void closeMethodCallHandler() {
     _channel.setMethodCallHandler(null);
-  }
-
-  Future<bool> _checkLicence() async {
-    if (_licenceKey.isEmpty) {
-      return false;
-    }
-    try {
-      final _licence = CheckLicenceTech.instance();
-      final result = await _licence.checkLicence(
-        _licenceKey,
-        url: licenceCheck,
-      );
-      return result;
-    } catch (e) {
-      log('Error checking licence: $e');
-      return false;
-    }
   }
 
   Future<bool> _invoke(String method, [Map<String, dynamic>? arguments]) async {

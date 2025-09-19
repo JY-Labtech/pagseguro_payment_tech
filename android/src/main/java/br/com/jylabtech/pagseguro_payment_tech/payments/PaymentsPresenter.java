@@ -22,7 +22,7 @@ public class PaymentsPresenter {
   @Inject
   public PaymentsPresenter(PlugPag plugPag, MethodChannel channel, Context context) {
     mFragment = new PaymentsFragment(channel);
-    mUseCase = new PaymentsUseCase(plugPag, context, this.mFragment);
+    mUseCase = new PaymentsUseCase(plugPag, context, channel);
   }
 
   public void rebootDevice() {mUseCase.rebootDevice();}
@@ -151,8 +151,8 @@ public class PaymentsPresenter {
         .subscribe();
   }
   public void activate(String activationCode) throws Exception {
-    Log.d("print", "*** ATIVANDO PINPAD: " + activationCode);
     mFragment.onMessage("Ativando terminal");
+
     mSubscribe =
       mUseCase
         .initializeAndActivatePinpad(activationCode)
@@ -164,7 +164,6 @@ public class PaymentsPresenter {
             mFragment.onMessage("Terminal ativado");
             mFragment.onAuthProgress("Terminal ativado");
             mFragment.disposeDialog();
-            Log.d("print", "*** pinpad ativado ");
         })
         .doOnDispose(() -> mFragment.disposeDialog())
         .subscribe(
@@ -177,7 +176,6 @@ public class PaymentsPresenter {
               Log.d("print", "*** throw: " + throwable.getMessage());
           }
         );
-    Log.d("print", "*** FIM ATIVAÇÃO: ");
   }
   public void isAuthenticate() throws Exception {
         mFragment.onMessage("Obtendo status do terminal");
@@ -188,7 +186,6 @@ public class PaymentsPresenter {
                 .doOnComplete(()-> {
                     mFragment.onLoading(false);
                     mFragment.disposeDialog();
-                    Log.d("print", "*** pinpad ativado ");
                 })
                 .doOnDispose(() -> mFragment.disposeDialog())
                 .subscribe(
@@ -206,7 +203,6 @@ public class PaymentsPresenter {
                             mFragment.onError(throwable.getMessage());
                             Log.d("print", "*** throw: " + throwable.getMessage());
                         });
-        Log.d("print", "*** FIM ATIVAÇÃO: ");
     }
   public void getLastTransaction() throws Exception {
     mSubscribe =
@@ -233,7 +229,13 @@ public class PaymentsPresenter {
   }
 
     public boolean checkValidLicence(String licenceKey, String licenceInternalKey) throws Exception {
-        return this.mUseCase.checkValidLicence(licenceKey, licenceInternalKey);
+      boolean aux = false;
+        boolean result =  this.mUseCase.checkValidLicence(licenceKey, licenceInternalKey);
+        if(result) {
+            aux = true;
+        }
+
+        return aux;
     }
   
   public void dispose() {

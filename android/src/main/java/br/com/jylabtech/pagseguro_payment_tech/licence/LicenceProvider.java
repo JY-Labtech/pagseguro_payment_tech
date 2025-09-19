@@ -20,16 +20,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import android.util.Log;
-
-// Exceções personalizadas
-class LicenceInvalidException extends Exception { LicenceInvalidException(String msg) { super(msg); } }
-class LicenceUnAuthorizedException extends Exception { LicenceUnAuthorizedException(String msg) { super(msg); } }
-class LicenceNotFoundException extends Exception { LicenceNotFoundException(String msg) { super(msg); } }
-class LicenceConditionRequiredException extends Exception { LicenceConditionRequiredException(String msg) { super(msg); } }
-class LicenceExpiredException extends Exception { LicenceExpiredException(String msg) { super(msg); } }
-class LicenceInternalErrorException extends Exception { LicenceInternalErrorException(String msg) { super(msg); } }
-class LicenceErrorException extends Exception { LicenceErrorException(String msg) { super(msg); } }
-
 public class LicenceProvider {
 
     private final Context context;
@@ -46,6 +36,7 @@ public class LicenceProvider {
     public LicenceResult checkLicence(final String urlString, final String licenceKey) throws Exception {
         LicenceResult licenceResult = new LicenceResult();
         licenceResult.setMethod("licence");
+
         Callable<LicenceResult> task = new Callable<LicenceResult>() {
             @Override
             public LicenceResult call() throws Exception {
@@ -80,7 +71,6 @@ public class LicenceProvider {
                     os.close();
 
                     int responseCode = connection.getResponseCode();
-                    Log.d("print", "*responseCode: " + responseCode);
                     BufferedReader reader;
 
                     if (responseCode == HttpURLConnection.HTTP_OK) {
@@ -92,7 +82,6 @@ public class LicenceProvider {
                         }
                         reader.close();
 
-                        Log.d("print", "*responseStr: " + responseStr.toString());
                         licenceResult.setResult(0);
                         licenceResult.setLicenceEntity(CheckLicenceEntity.fromJson(responseStr.toString()));
 
@@ -125,7 +114,7 @@ public class LicenceProvider {
     private String handleErrors(HttpURLConnection connection) throws Exception {
         String errorMessage = "Erro interno";
         int statusCode = connection.getResponseCode();
-        Log.d("print", "*statusCode: " + statusCode);
+        
         BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
         StringBuilder responseStr = new StringBuilder();
         String line;
@@ -139,23 +128,12 @@ public class LicenceProvider {
             JSONObject json = new JSONObject(responseStr.toString());
             message = json.optString("message", null);
             errorMessage = message;
-            Log.d("print", "*messageError: " + message);
         } catch (JSONException e) {
             errorMessage = e.getMessage();
             Log.d("print", "*ExceptionMessageError: " + e.getMessage());
         }
 
         return errorMessage;
-
-//        switch (statusCode) {
-//            case 400: throw new LicenceInvalidException(message != null ? message : "Bad Request");
-//            case 401: throw new LicenceUnAuthorizedException(message != null ? message : "Unauthorized");
-//            case 404: throw new LicenceNotFoundException(message != null ? message : "Not Found");
-//            case 412: throw new LicenceConditionRequiredException(message != null ? message : "Precondition Failed");
-//            case 428: throw new LicenceExpiredException(message != null ? message : "Licence Expired");
-//            case 500: throw new LicenceInternalErrorException(message != null ? message : "Internal Server Error");
-//            default: throw new LicenceErrorException(message != null ? message : "Unknown Error");
-//        }
     }
 
     @SuppressLint("HardwareIds")

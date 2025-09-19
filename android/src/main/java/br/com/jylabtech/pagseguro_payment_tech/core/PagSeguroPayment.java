@@ -99,19 +99,18 @@ public class PagSeguroPayment {
       printerPresenter.printerByFilePath(filePath);
     }
 
-    String licenceKeyLocal = BuildConfig.LICENCE_KEY;
-    String licenceInternalKey = BuildConfig.LICENCE_INTERNAL_KEY;
-
-    boolean resultLicence = this.payment.checkValidLicence(licenceKeyLocal, licenceInternalKey);
-    Log.d("print", "*resultLicence: " + resultLicence);
-    if(!resultLicence) {
-      throw new Exception("Sua licença não foi ativada.");
-    }
-
     if (this.payment == null) {
       this.payment = new PaymentsPresenter(this.plugPag, this.mChannel, this.context);
     }
 
+    String licenceKeyLocal = BuildConfig.LICENCE_KEY;
+    String licenceInternalKey = BuildConfig.LICENCE_INTERNAL_KEY;
+
+    boolean resultLicence = this.payment.checkValidLicence(licenceKeyLocal, licenceInternalKey);
+    if(!resultLicence) {
+      throw new Exception("Sua licença não foi ativada.");
+    }
+    
     mUseCase = new NFCUseCase(plugPag);
     mFragment = new NFCFragment(mChannel);
     mUserManager = new UserDataManager(
