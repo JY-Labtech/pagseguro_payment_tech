@@ -19,6 +19,7 @@ import br.com.jylabtech.pagseguro_payment_tech.core.ActionResult;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.ObservableEmitter;
+import io.flutter.plugin.common.MethodChannel;
 
 public class PaymentsUseCase {
 
@@ -36,10 +37,10 @@ public class PaymentsUseCase {
   private CheckLicenceTech licenceTech;
   private PaymentsFragment mFragment;
   
-	public PaymentsUseCase(PlugPag plugPag, Context context, PaymentsFragment fragmemnt) {
+	public PaymentsUseCase(PlugPag plugPag, Context context, MethodChannel channel) {
     mPlugPag = plugPag;
     this.licenceTech = new CheckLicenceTech(context);
-    this.mFragment = fragmemnt;
+    this.mFragment = new PaymentsFragment(channel);
   }
 
   public Observable<ActionResult> doCreditPayment(
@@ -308,8 +309,6 @@ public class PaymentsUseCase {
     result.setMethod("licence");
     this.mFragment.onMessage("Verificando licença");
     LicenceResult resultLicence =  licenceTech.validateLicence(licenceKey, licenceInternalKey);
-    Log.d("print", "****resultLicence: " + resultLicence);
-
 
     if(resultLicence.getResult() == 0) {
       aux = true;
@@ -337,10 +336,10 @@ public class PaymentsUseCase {
     return aux;
   }
 
-  private boolean isValidLicence() throws Exception {
+  private void isValidLicence() throws Exception {
     boolean result = licenceTech.validateExistsLicence();
     if(result) {
-      return true;
+      return;
     }
 
     throw new Exception("Licença inválida ou não foi inicializada!");
