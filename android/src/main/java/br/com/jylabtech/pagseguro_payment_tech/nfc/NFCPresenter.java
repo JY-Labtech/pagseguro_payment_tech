@@ -7,6 +7,12 @@ import java.util.List;
 
 import javax.inject.Inject;
 
+import br.com.jylabtech.pagseguro_payment_tech.user.usecase.DebitUserUseCase;
+import br.com.jylabtech.pagseguro_payment_tech.user.usecase.EditUserUseCase;
+import br.com.jylabtech.pagseguro_payment_tech.user.usecase.GetUserUseCase;
+import br.com.jylabtech.pagseguro_payment_tech.user.usecase.NewUserUseCase;
+import br.com.jylabtech.pagseguro_payment_tech.user.usecase.RefundUserUseCase;
+import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.data.request.PlugPagLedData;
 import br.com.jylabtech.pagseguro_payment_tech.helpers.NFCConstants;
 import br.com.jylabtech.pagseguro_payment_tech.helpers.Utils;
@@ -16,6 +22,7 @@ import br.com.jylabtech.pagseguro_payment_tech.user.UserData;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
+import io.flutter.plugin.common.MethodChannel;
 
 public class NFCPresenter  {
 
@@ -25,10 +32,16 @@ public class NFCPresenter  {
     private Disposable mSubscribe;
 
     @Inject
-    public NFCPresenter(NFCFragment mFragment, NFCUseCase nfcUseCase, UserDataManager userManager) {
-        this.mUseCase = nfcUseCase;
-        this.mFragment = mFragment;
-        this.mUserManager = userManager;
+    public NFCPresenter(PlugPag plugPag, MethodChannel channel) {
+        this.mUseCase = new NFCUseCase(plugPag);
+        this.mFragment = new NFCFragment(channel);
+        this.mUserManager = new UserDataManager(
+                new GetUserUseCase(this.mUseCase),
+                new NewUserUseCase(this.mUseCase),
+                new EditUserUseCase(this.mUseCase),
+                new DebitUserUseCase(this.mUseCase),
+                new RefundUserUseCase(this.mUseCase)
+        );
     }
 
     public void readNFCCard(String idEvento) {

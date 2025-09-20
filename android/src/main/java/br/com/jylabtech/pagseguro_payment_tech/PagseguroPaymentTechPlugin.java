@@ -43,11 +43,17 @@ public class PagseguroPaymentTechPlugin
   @Override
   public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
     //Function responsible for listening to methods called by flutter
-    if (call.method.startsWith("payment") || call.method.equals("startPayment")) {
-      //Call payment method
-      pagseguroPayment.initPayment(call, result);
-    } else {
-      result.notImplemented();
+    try {
+      if (call.method.startsWith("payment") || call.method.equals("startPayment")) {
+        //Call payment method
+        pagseguroPayment.initPayment(call, result);
+      } else {
+        result.notImplemented();
+      }
+
+    } catch (Exception e) {
+      // Captura qualquer Exception e envia de volta para o Flutter
+      result.error("ERROR", e.getMessage(), null);
     }
   }
 
