@@ -256,6 +256,36 @@ final class Payment {
     }
   }
 
+  //Function to get user data
+  Future<bool> getUserData() async {
+    return await channel.invokeMethod(PaymentTypeCall.GET_USER_DATA.method);
+  }
+
+  //Function to set dialog style
+  Future<bool> setDialogstyle({
+    required String title,
+    required String buttonBackgroundColor,
+    required String buttonBackgroundColorDisabled,
+    required String cancelTextColor,
+    required String confirmTextColor,
+    required String sendSMSTextColor,
+    required String titleColor,
+    required String windowBackgroundColor,
+    required int maxTimeShowPopUp, //Tempo máximo em segundos que o pop up ficará visível
+  }) async {
+    return await channel.invokeMethod(PaymentTypeCall.STYLE_DIALOG.method, {
+      "title": title,
+      "buttonBackgroundColor": buttonBackgroundColor,
+      "buttonBackgroundColorDisabled": buttonBackgroundColorDisabled,
+      "cancelTextColor": cancelTextColor,
+      "confirmTextColor": confirmTextColor,
+      "sendSMSTextColor": sendSMSTextColor,
+      "titleColor": titleColor,
+      "windowBackgroundColor": windowBackgroundColor,
+      "maxTimeShowPopUp": maxTimeShowPopUp,
+    });
+  }
+
   //Function to listen to pagseguro returns in the native environment and notify Flutter
   Future<dynamic> _callHandler(MethodCall call) async {
     switch (call.method.handler) {

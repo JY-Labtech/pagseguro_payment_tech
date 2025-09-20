@@ -3,7 +3,7 @@ package br.com.jylabtech.pagseguro_payment_tech.core;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagTransactionResult;
 import com.google.gson.Gson;
 
-public class ActionResult {
+public class ActionResult extends BaseResult{
 
     private String errorMessage;
 

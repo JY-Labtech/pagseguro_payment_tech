@@ -5,7 +5,6 @@ import java.util.Random;
 
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagAbortResult;
-import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagCustomPrinterLayout;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagPaymentData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagPrintResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagPrinterListener;
@@ -108,7 +107,6 @@ public class TransactionsUseCase {
             ActionResult result = new ActionResult();
             setListener(emitter, result);
             setPrintListener(emitter, result);
-            mPlugPag.setPlugPagCustomPrinterLayout(getCustomPrinterDialog());
             PlugPagTransactionResult plugPagTransactionResult = mPlugPag.voidPayment(plugPagVoidData);
             sendResponse(emitter, plugPagTransactionResult, result);
         });
@@ -117,7 +115,6 @@ public class TransactionsUseCase {
     private Observable<ActionResult> doPayment(final PlugPagPaymentData paymentData) {
         mPlugPagPaymentData = paymentData;
         return Observable.create(emitter -> {
-            mPlugPag.setPlugPagCustomPrinterLayout(getCustomPrinterDialog());
             ActionResult result = new ActionResult();
             setListener(emitter, result);
             setPrintListener(emitter, result);
@@ -228,13 +225,5 @@ public class TransactionsUseCase {
 
             sendResponse(emitter, result, actionResult);
         });
-    }
-
-    public PlugPagCustomPrinterLayout getCustomPrinterDialog() {
-        PlugPagCustomPrinterLayout customDialog = new PlugPagCustomPrinterLayout();
-        customDialog.setTitle("Teste: Imprimir via do client?");
-        customDialog.setButtonBackgroundColor("#00ff33");
-
-        return customDialog;
     }
 }

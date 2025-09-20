@@ -1,6 +1,9 @@
 package br.com.jylabtech.pagseguro_payment_tech.payments;
 import android.content.Context;
 import android.util.Log;
+
+import br.com.jylabtech.pagseguro_payment_tech.core.BaseResult;
+import br.com.jylabtech.pagseguro_payment_tech.core.UserDataResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagEventData;
 import br.com.jylabtech.pagseguro_payment_tech.core.ActionResult;
@@ -58,6 +61,8 @@ public class PaymentsPresenter {
   }  
 
   private void doAction(Observable<ActionResult> action, int value) throws Exception {
+      ActionResult actionResult = new ActionResult();
+      actionResult.setMethod("transaction");
     mSubscribe =
       mUseCase
         .isAuthenticated()
@@ -90,20 +95,23 @@ public class PaymentsPresenter {
             } else {
               mFragment.onMessage(checkMessage(result.getMessage()));
             }
-            checkResponse(result);
+            sendResponse(result);
           },
           throwable -> {
             mFragment.onMessage(throwable.getMessage());
             mFragment.onError(throwable.getMessage());
+            actionResult.setErrorMessage(throwable.getMessage());
+            actionResult.setResult(999999);
+            sendResponse(actionResult);
             mFragment.disposeDialog();
           }
         );
   }
-  private void checkResponse(ActionResult result) {
-    if (result.getBuildResponse() != 0) {
+
+
+  private void sendResponse(BaseResult result) {
       String response = new Gson().toJson(result);
       mFragment.onFinishedResponse(response);
-    }
   }
   private String checkMessagePassword(int eventCode, int value) {
     StringBuilder strPassword = new StringBuilder();
@@ -151,6 +159,8 @@ public class PaymentsPresenter {
         .subscribe();
   }
   public void activate(String activationCode) throws Exception {
+      ActionResult resultAction = new ActionResult();
+      resultAction.setMethod("activate");
     mFragment.onMessage("Ativando terminal");
 
     mSubscribe =
@@ -161,13 +171,18 @@ public class PaymentsPresenter {
         .doOnSubscribe(disposable -> mFragment.onLoading(true))
         .doOnComplete(() -> {
             mFragment.onLoading(false);
+            resultAction.setMessage("Terminal ativado");
+            resultAction.setResult(0);
             mFragment.onMessage("Terminal ativado");
             mFragment.onAuthProgress("Terminal ativado");
             mFragment.disposeDialog();
+            sendResponse(resultAction);
         })
         .doOnDispose(() -> mFragment.disposeDialog())
         .subscribe(
-          actionResult -> mFragment.onAuthProgress(actionResult.getMessage()),
+          actionResult -> {
+              mFragment.onAuthProgress(actionResult.getMessage()),
+          },
           throwable -> {
               mFragment.onLoading(false);
               mFragment.onMessage("Error ao ativar terminal");
@@ -236,6 +251,12 @@ public class PaymentsPresenter {
         }
 
         return aux;
+    }
+
+    public void getUserData() throws Exception {
+        UserDataResult result = this.mUseCase.getUserData();
+        result.setMethod("userData");
+        sendResponse(result);
     }
   
   public void dispose() {
