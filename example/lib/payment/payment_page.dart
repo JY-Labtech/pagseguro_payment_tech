@@ -22,7 +22,7 @@ class _PaymentPageState extends State<PaymentPage> {
   @override
   void initState() {
     //Inicializar a classe handle para escutar os métodos e retornos da pagseguro
-    PagseguroPaymentTech.I.initPayment(handler: controller, licenceKey: '');
+    PagseguroPaymentTech.I.initPayment(handler: controller);
     super.initState();
   }
 
