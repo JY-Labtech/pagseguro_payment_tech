@@ -158,6 +158,8 @@ enum PaymentTypeCall {
   REBOOT,
   BEEP,
   GET_SERIAL_NUMBER,
+  GET_USER_DATA,
+  STYLE_DIALOG,
 }
 
 enum PaymentTypeCredit {
@@ -228,6 +230,10 @@ extension PaymentTypeCallExt on PaymentTypeCall {
         return 'paymentBeep';
       case PaymentTypeCall.GET_SERIAL_NUMBER:
         return 'paymentGetSerialNumber';
+      case PaymentTypeCall.GET_USER_DATA:
+        return 'paymentGetUserData';
+      case PaymentTypeCall.STYLE_DIALOG:
+        return 'paymentStyleDialog';
     }
   }
 }

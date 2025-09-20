@@ -4,14 +4,15 @@ import android.util.Log;
 
 import com.google.gson.Gson;
 
+import br.com.jylabtech.pagseguro_payment_tech.core.UserDataResult;
 import br.com.jylabtech.pagseguro_payment_tech.licence.CheckLicenceTech;
 import br.com.jylabtech.pagseguro_payment_tech.licence.LicenceResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagActivationData;
-import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagCustomPrinterLayout;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagInitializationResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagPaymentData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagTransactionResult;
+import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagUserDataResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagVoidData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.data.request.PlugPagBeepData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.exception.PlugPagException;
@@ -183,9 +184,6 @@ public class PaymentsUseCase {
   private Observable<ActionResult> doPayment(
     final PlugPagPaymentData paymentData
   ) {
-    PlugPagCustomPrinterLayout customDialog = new PlugPagCustomPrinterLayout();
-    customDialog.setMaxTimeShowPopup(30);
-    mPlugPag.setPlugPagCustomPrinterLayout(customDialog);
     return Observable.create(emitter -> {
       ActionResult result = new ActionResult();
       setListener(emitter, result);
@@ -240,9 +238,6 @@ public class PaymentsUseCase {
     String activationCode
   ) throws Exception {
     isValidLicence();
-    PlugPagCustomPrinterLayout customDialog = new PlugPagCustomPrinterLayout();
-    customDialog.setMaxTimeShowPopup(30);
-    mPlugPag.setPlugPagCustomPrinterLayout(customDialog);
     return Observable.create(emitter -> {
       ActionResult actionResult = new ActionResult();
       mPlugPag.setEventListener(plugPagEventData -> {
@@ -343,6 +338,21 @@ public class PaymentsUseCase {
     }
 
     throw new Exception("Licença inválida ou não foi inicializada!");
+  }
+
+  public UserDataResult getUserData() throws Exception {
+    isValidLicence();
+    PlugPagUserDataResult userDataResult = mPlugPag.getUserData();
+    UserDataResult userResult = new UserDataResult();
+    userResult.setAddress(userDataResult.getAddress());
+    userResult.setCity(userDataResult.getCity());
+    userResult.setCnpjCpf(userDataResult.getCnpjCpf());
+    userResult.setAddressComplement(userDataResult.getAddressComplement());
+    userResult.setCompanyName(userDataResult.getCompanyName());
+    userResult.setUserNickName(userDataResult.getUserNickName());
+    userResult.setAddressState(userDataResult.getAddressState());
+    userResult.setEmail(userDataResult.getEmail());
+    return userResult;
   }
 
 
