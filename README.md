@@ -36,7 +36,7 @@ Cada licença é válida por terminal. Após a compra, será gerada uma chave `l
 );
 ```
 
-A partir da versão 1.0.0 é necessário adicionar as chaves no seu arquivo `local.properties` na raiz da pasta `android`.
+A partir da versão 2.0.0 é necessário adicionar as chaves no seu arquivo `local.properties` na raiz da pasta `android`.
 
 ```
 licenceKey=<sua_licenca>
