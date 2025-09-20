@@ -1,5 +1,7 @@
 ## 2.0.0
 
+    - Configure new methods setDialogStyle and getUserdata
+
 ⚠️ Attention: In this version, there is an important change in the way payments are initialized.
 
 🛠️ What changed:
