@@ -95,7 +95,8 @@ public class PaymentsPresenter {
             } else {
               mFragment.onMessage(checkMessage(result.getMessage()));
             }
-            sendResponse(result);
+            result.setMethod("transaction");
+            checkAndSendResponse(result); //Verificar o que ele fazia antes para enviar o onFinishedResponse
           },
           throwable -> {
             mFragment.onMessage(throwable.getMessage());
@@ -113,6 +114,13 @@ public class PaymentsPresenter {
       String response = new Gson().toJson(result);
       mFragment.onFinishedResponse(response);
   }
+
+   private void checkAndSendResponse(ActionResult result) {
+    if (result.getBuildResponse() != 0) {
+      sendResponse(result);
+    }
+  }
+
   private String checkMessagePassword(int eventCode, int value) {
     StringBuilder strPassword = new StringBuilder();
     if (eventCode == PlugPagEventData.EVENT_CODE_DIGIT_PASSWORD) {
@@ -181,18 +189,24 @@ public class PaymentsPresenter {
         .doOnDispose(() -> mFragment.disposeDialog())
         .subscribe(
           actionResult -> {
-              mFragment.onAuthProgress(actionResult.getMessage()),
+              actionResult.setMethod("activate");
+              mFragment.onAuthProgress(actionResult.getMessage());
           },
           throwable -> {
               mFragment.onLoading(false);
               mFragment.onMessage("Error ao ativar terminal");
               mFragment.disposeDialog();
               mFragment.onError(throwable.getMessage());
+              resultAction.setErrorMessage(throwable.getMessage());
+              resultAction.setResult(999999);
+              sendResponse(resultAction);
               Log.d("print", "*** throw: " + throwable.getMessage());
           }
         );
   }
   public void isAuthenticate() throws Exception {
+    ActionResult resultAction = new ActionResult();
+    resultAction.setMethod("activate");
         mFragment.onMessage("Obtendo status do terminal");
         mSubscribe = mUseCase.isAuthenticated()
                 .observeOn(AndroidSchedulers.mainThread())
@@ -206,16 +220,25 @@ public class PaymentsPresenter {
                 .subscribe(
                         result -> {
                             if(result){
+                                resultAction.setMethod("activate");
+                                 resultAction.setMessage("Terminal ativado");
+                                 resultAction.setResult(0);
                                 mFragment.onAuthProgress("Terminal ativado");
                             }else {
                                 mFragment.onAuthProgress("Terminal não ativado");
+                                resultAction.setMessage("Terminal não ativado");
+                                resultAction.setResult(999999);
                             }
+                            sendResponse(resultAction);
                         },
                         throwable -> {
                             mFragment.onLoading(false);
                             mFragment.onMessage("Error ao obter status do terminal");
                             mFragment.disposeDialog();
                             mFragment.onError(throwable.getMessage());
+                            resultAction.setErrorMessage(throwable.getMessage());
+                            resultAction.setResult(999999);
+                            sendResponse(resultAction);
                             Log.d("print", "*** throw: " + throwable.getMessage());
                         });
     }

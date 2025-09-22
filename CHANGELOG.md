@@ -1,4 +1,4 @@
-## 2.0.0+1
+## 2.0.0+2
 
     - Configure new methods setDialogStyle and getUserdata
 
