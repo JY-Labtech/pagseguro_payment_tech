@@ -1,6 +1,5 @@
 import 'package:bot_toast/bot_toast.dart';
-
-import 'package:pagseguro_payment_tech/payments/handler/payment_handler.dart';
+import 'package:pagseguro_payment_tech/pagseguro_payment_tech.dart';
 
 class PaymentController extends PaymentHandler {
   int saleValue = 0;

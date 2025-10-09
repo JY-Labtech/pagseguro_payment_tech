@@ -160,6 +160,29 @@ await NfcSmart.instance.closeMethodCallHandler();
 await NfcSmart.instance.lastTransaction();
 ```
 
+### Pagina automatizada
+
+```dart
+final result = await Navigator.push<PagseguroResponseModel?>(
+  context,
+  MaterialPageRoute(
+    builder: (context) => PagseguroPage(
+      params: PagseguroPageParams(
+        amount: 100,
+        type: PagseguroPaymentType.credit,
+        options: PagseguroOptions(
+          activationCode: '123456',
+          isPrinterEstablishment: false,
+        ),
+      ),
+    ),
+  ),
+);
+```
+
+Neste exemplo acima a váriavel `result` é do tipo `PagseguroResponseModel`.
+<br/>
+
 <table>
   <tr>
     <td align="center">

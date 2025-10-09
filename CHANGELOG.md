@@ -1,3 +1,7 @@
+## 2.0.1
+
+- Configure PagseguroPage to automatize payment flow
+
 ## 2.0.0+2
 
     - Configure new methods setDialogStyle and getUserdata
