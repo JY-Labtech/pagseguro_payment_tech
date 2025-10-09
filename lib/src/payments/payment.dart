@@ -1,9 +1,9 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 // ignore_for_file: constant_identifier_names
 import 'package:flutter/services.dart';
-import 'package:pagseguro_payment_tech/licence/constants/licence_constants.dart';
-import 'package:pagseguro_payment_tech/payments/handler/payment_handler.dart';
-import 'package:pagseguro_payment_tech/payments/utils/payment_types.dart';
+import 'package:pagseguro_payment_tech/src/licence/constants/licence_constants.dart';
+import 'package:pagseguro_payment_tech/src/payments/handler/payment_handler.dart';
+import 'package:pagseguro_payment_tech/src/payments/utils/payment_types.dart';
 
 //Fixed channel name
 

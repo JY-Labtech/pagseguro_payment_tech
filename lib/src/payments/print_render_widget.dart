@@ -7,7 +7,7 @@ import 'package:flutter/rendering.dart';
 
 import 'package:path_provider/path_provider.dart';
 
-import 'package:pagseguro_payment_tech/pagseguro_payment_tech.dart';
+import 'package:pagseguro_payment_tech/src/payments/pagseguro_payment_tech.dart';
 
 /// Widget auxiliar para renderização e impressão de um widget específico.
 ///

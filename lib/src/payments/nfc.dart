@@ -1,8 +1,8 @@
 // ignore_for_file: constant_identifier_names
 import 'package:flutter/services.dart';
-import 'package:pagseguro_payment_tech/payments/handler/nfc_handler.dart';
-import 'package:pagseguro_payment_tech/payments/payment.dart';
-import 'package:pagseguro_payment_tech/payments/utils/payment_types.dart';
+import 'package:pagseguro_payment_tech/src/payments/handler/nfc_handler.dart';
+import 'package:pagseguro_payment_tech/src/payments/payment.dart';
+import 'package:pagseguro_payment_tech/src/payments/utils/payment_types.dart';
 
 const CHANNEL_NFC_NAME = "pagseguro_payment_tech";
 
