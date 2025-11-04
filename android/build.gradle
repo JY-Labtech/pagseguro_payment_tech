@@ -3,7 +3,7 @@ version = "1.0"
 
 buildscript {
     ext {
-        kotlin_version = '1.9.0'
+        kotlin_version = '2.1.21'
 
         localProps = new Properties()
         fileName = 'local.properties'
@@ -33,7 +33,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.7.3'
+        classpath 'com.android.tools.build:gradle:8.12.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
@@ -54,7 +54,7 @@ apply plugin: 'kotlin-android'
 android {
     namespace = "br.com.jylabtech.pagseguro_payment_tech"
 
-    compileSdk = 34
+    compileSdk = 35
 
     buildFeatures {
         buildConfig = true
@@ -88,11 +88,6 @@ android {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
-    dependencies {
-        testImplementation("junit:junit:4.13.2")
-        testImplementation("org.mockito:mockito-core:5.0.0")
-    }
-
     testOptions {
         unitTests.all {
             testLogging {
@@ -104,7 +99,10 @@ android {
     }
 }
 
-dependencies{
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mockito:mockito-core:5.0.0")
+    
     implementation 'com.google.dagger:dagger:2.38.1'
     annotationProcessor "com.google.dagger:dagger-compiler:2.38.1"
     implementation 'io.reactivex.rxjava2:rxjava:2.1.16'
@@ -114,7 +112,7 @@ dependencies{
     implementation 'com.google.code.gson:gson:2.10.1'
 
     // Dependencia da PagSeguro
-    implementation 'br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.30.51'
+    implementation 'br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.30.52'
 
     //Dependencias para módulo de licenças
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

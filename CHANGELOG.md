@@ -1,3 +1,8 @@
+## 2.1.0
+
+- Update plugin to use gradle 8.12
+- Update Wrapper to version 1.30.52
+
 ## 2.0.1
 
 - Configure PagseguroPage to automatize payment flow
