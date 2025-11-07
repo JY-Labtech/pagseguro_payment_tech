@@ -32,6 +32,8 @@ Cada licença é válida por terminal. Após a compra, será gerada uma chave `l
 ```dart
  PagseguroPaymentTech.initPayment(
   handler: controller,
+  licenceKey: '',
+  licenceInternalKey: '',
 );
 
  PagseguroPaymentTech.initNfc(
@@ -201,143 +203,146 @@ dependencies:
   pagseguro_payment_tech: any
 ```
 
-### Android Manifest
+---
 
-```xml
-<uses-permission android:name="br.com.uol.pagseguro.permission.MANAGE_PAYMENTS"/>
-```
+## Configuração Android
 
-### Intent-filter
+1. **Permissão obrigatória** no `AndroidManifest.xml` do app:
 
-```xml
-<intent-filter>
- <action android:name="br.com.uol.pagseguro.PAYMENT"/>
- <category android:name="android.intent.category.DEFAULT"/>
-</intent-filter>
-```
+   ```xml
+   <uses-permission android:name="br.com.uol.pagseguro.permission.MANAGE_PAYMENTS" />
+   ```
 
-### build.gradle (app level)
+2. **Intent filter** na `MainActivity` para receber callbacks:
 
-```gradle
-defaultConfig {
-  applicationId "com.exemplo.pagamento"
-  minSdkVersion 23
-  targetSdkVersion flutter.targetSdkVersion
-  ...
-}
-```
+   ```xml
+   <intent-filter>
+       <action android:name="br.com.uol.pagseguro.PAYMENT" />
+       <category android:name="android.intent.category.DEFAULT" />
+   </intent-filter>
+   ```
 
-## 📦 Implementação
+3. **Configuração mínima do app**:
 
-### Criar Handler
+   ```gradle
+   defaultConfig {
+       applicationId "com.exemplo.pagamento"
+       minSdkVersion 23
+       targetSdkVersion flutter.targetSdkVersion
+   }
+   ```
 
-```dart
-class PaymentController extends PaymentHandler {
-  // implementação omitida para brevidade
-}
-```
-
-#### Métodos principais do Handler
-
-- `onTransactionSuccess()` — Transação aprovada
-- `onError(String)` — Erro na transação
-- `onMessage(String)` — Mensagem da PagSeguro
-- `onTransactionInfo(...)` — Detalhes da transação
-- `writeToFile(...)` — Personalizável
-
-### Iniciando transações
-
-```dart
-PagseguroPaymentTech.I.payment.activePinpad('CODIGO_ATIVACAO');
-
-// Exemplos de pagamento:
-PagseguroPaymentTech.I.payment.creditPayment(12.50);
-PagseguroPaymentTech.I.payment.creditPaymentParc(1250, 2);
-PagseguroPaymentTech.I.payment.debitPayment(12.50);
-PagseguroPaymentTech.I.payment.pixPayment(12.50);
-PagseguroPaymentTech.I.payment.voucherPayment(12.50);
-PagseguroPaymentTech.I.payment.lastTransaction();
-```
-
-#### Estorno e cancelamento
-
-```dart
-PagseguroPaymentTech.I.payment.refund(
-  transactionCode: controller.transactionCode,
-  transactionId: controller.transactionId,
-);
-
-PagseguroPaymentTech.I.payment.abortTransaction();
-```
-
-### Impressão
-
-```dart
-PagseguroPaymentTech.I.payment.printerfromFile('path/to/file.pdf');
-
-PrintRenderWidget.print(
-  context,
-  pagseguroPaymentInstance: pagseguroPayment,
-  child: MyCustomWidget(),
-);
-```
-
-## 📡 NFC Smart
-
-### Inicialização
-
-```dart
- PagseguroPaymentTech.initNfc(
-  handler: SeuNfcHandler(),
-);
-```
-
-### Principais métodos NFC
-
-```dart
-await NfcSmart.instance.readNfc(idEvento);
-await NfcSmart.instance.writeNfc(valor, nome, cpf, numeroTag, celular, aberto, idEvento);
-await NfcSmart.instance.refundNfc(valor, idEvento);
-await NfcSmart.instance.formatNfc();
-await NfcSmart.instance.debitNfc(idEvento, valor);
-await NfcSmart.instance.closeMethodCallHandler();
-await NfcSmart.instance.lastTransaction();
-```
-
-### Pagina automatizada
-
-```dart
-final result = await Navigator.push<PagseguroResponseModel?>(
-  context,
-  MaterialPageRoute(
-    builder: (context) => PagseguroPage(
-      params: PagseguroPageParams(
-        amount: 100,
-        type: PagseguroPaymentType.credit,
-        options: PagseguroOptions(
-          activationCode: '123456',
-          isPrinterEstablishment: false,
-        ),
-      ),
-    ),
-  ),
-);
-```
-
-Neste exemplo acima a váriavel `result` é do tipo `PagseguroResponseModel`.
-<br/>
-
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/JY-Labtech">
-        <img src="https://avatars.githubusercontent.com/u/185066406?s=200&v=4" width="100px;" alt=""/>
-        <br /><sub><b>JY Labtech</b></sub>
-      </a>
-    </td>
-  </tr>
-</table>
+4. O host precisa do app **PlugPagService** instalado e atualizado no equipamento.
 
 ---
 
-⬆️ [Voltar ao topo](#pagseguro-payment-tech)
+## Inicialização & Licença
+
+As chaves de licença **não** ficam mais em `local.properties`. O app deve fornecê-las em tempo de execução.
+
+```dart
+final payment = PagseguroPaymentTech.I.initPayment(
+  handler: MyPaymentHandler(),
+  licenceKey: licenceKeyFromBackend,
+  licenceInternalKey: licenceInternalKeyFromBackend,
+);
+```
+
+- Busque as chaves com segurança (ex.: backend autenticado, serviço de segredos).
+- O módulo nativo valida, armazena criptografado e reutiliza a licença quando possível.
+
+---
+
+## Operações de Pagamento
+
+```dart
+// Ativar pinpad
+await payment.activePinpad('CODIGO_ATIVACAO');
+
+// Pagamentos
+await payment.debitPayment(1000);            // R$ 10,00
+await payment.creditPayment(1000);
+await payment.creditPaymentParc(1000, 2);    // Parcelado
+await payment.voucherPayment(1000);
+await payment.pixPayment(1000);
+
+// Fluxo genérico
+await payment.startPayment(
+  PaymentType.credit,
+  2500,
+  installments: 3,
+  installmentType: PaymentTypeCredit.CLIENT,
+);
+
+// Operações auxiliares
+await payment.lastTransaction();
+await payment.abortTransaction();
+await payment.refund(transactionCode: code, transactionId: id);
+await payment.isAuthenticated();
+```
+
+---
+
+## Impressão
+
+```dart
+await payment.printerfromFile('/storage/emulated/0/receipt.pdf');
+await payment.printerFile('receipt.txt');
+await payment.printer('TEXTO A SER IMPRESSO');
+
+// Renderizar widgets Flutter
+await PrintRenderWidget.print(
+  context,
+  pagseguroPaymentInstance: PagseguroPaymentTech.I,
+  child: MyCustomReceipt(),
+);
+```
+
+---
+
+## NFC
+
+```dart
+final nfc = PagseguroPaymentTech.I.initNfc(handler: MyNfcHandler());
+
+await nfc.writeNfc(
+  eventId: 'evento',
+  value: 500,
+  name: 'Cliente',
+  cpf: '12345678901',
+  phone: '11999999999',
+);
+
+await nfc.readNfc(eventId: 'evento');
+await nfc.debitNfc(eventId: 'evento', value: 500);
+await nfc.refundNfc(eventId: 'evento', value: 500);
+await nfc.formatNfc();
+```
+
+---
+
+## Página pronta
+
+O pacote disponibiliza `PagseguroPage` com fluxo completo de pagamento. Consulte `lib/src/app/presentation` para personalizar UI e handlers.
+
+---
+
+## Executando o exemplo
+
+O app de exemplo usa `String.fromEnvironment` para obter as chaves:
+
+```bash
+flutter run \
+  --dart-define=PAGSEGURO_LICENCE_KEY=SUA_LICENCE_KEY \
+  --dart-define=PAGSEGURO_LICENCE_INTERNAL_KEY=SUA_LICENCE_INTERNAL_KEY
+```
+
+Certifique-se de que os binários nativos presentes em `android/libs/` estejam atualizados (AAR e `<plugin>-native.jar`).
+
+---
+
+## Suporte & Licença
+
+- Projeto proprietário mantido por **JY Labtech**.
+- Uso restrito conforme os termos internos da empresa.
+- Para dúvidas, entre em contato com a equipe responsável ou abra um ticket interno.

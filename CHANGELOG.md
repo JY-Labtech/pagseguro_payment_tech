@@ -1,3 +1,10 @@
+## 3.0.0
+
+- Encapsula toda a implementação Android em um módulo nativo (AAR privado).
+- Novo script `scripts/build_android_aar.sh` para gerar os binários (`.aar` + `<plugin>-native.jar`).
+- `initPayment` volta a exigir `licenceKey` e `licenceInternalKey` informadas em tempo de execução (não usar mais `local.properties`).
+- Documentação atualizada com o novo fluxo e orientações de uso das chaves.
+
 ## 2.1.0
 
 - Update plugin to use gradle 8.12

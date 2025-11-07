@@ -1,16 +1,23 @@
-# pagseguro_smart_flutter_example
+# Exemplo `pagseguro_payment_tech`
 
-Demonstrates how to use the pagseguro_payment_tech plugin.
+Aplicativo demonstrativo que exercita pagamentos, NFC e impressão usando o plugin.
 
-## Getting Started
+## Como testar
 
-This project is a starting point for a Flutter application.
+1. Garanta que os binários nativos (`android/libs/pagseguro_payment_tech-release.aar` e `pagseguro_payment_tech-native.jar`) estejam atualizados.
+2. Conecte um Smart POS com o **PlugPagService** instalado.
+3. Rode o app definindo as chaves de licença via `--dart-define`:
+   ```bash
+   flutter run \
+     --dart-define=PAGSEGURO_LICENCE_KEY=SUA_LICENCE_KEY \
+     --dart-define=PAGSEGURO_LICENCE_INTERNAL_KEY=SUA_LICENCE_INTERNAL_KEY
+   ```
 
-A few resources to get you started if this is your first Flutter project:
+## Código relevante
 
-- [Lab: Write your first Flutter app](https://flutter.dev/docs/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
+- `lib/payment/payment_page.dart`: fluxo principal de pagamento e impressora.
+- `lib/payment/payment_controller.dart`: implementação de `PaymentHandler`.
+- `lib/payment/nfc_page.dart`: operações NFC (ler, gravar, debitar, estornar).
 
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+> **Dica:** para executar testes automatizados ou pipelines, injete as chaves através de variáveis de ambiente seguras e repasse-as para o comando `flutter run`/`flutter test` via `--dart-define`.
+

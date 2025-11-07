@@ -72,7 +72,7 @@ public class ActionResult extends BaseResult{
   private String readerModel; 
   private String nsu; 
   private String autoCode; 
-  private Character installments; 
+  private Integer installments; 
   private int originalAmount;
   private String buyerName; 
   private int paymentType;
@@ -266,11 +266,11 @@ public class ActionResult extends BaseResult{
       this.autoCode = autoCode;
   }
 
-  public Character getInstallments() {
+  public Integer getInstallments() {
       return installments;
   }
 
-  public void setInstallments(Character installments) {
+  public void setInstallments(Integer installments) {
       this.installments = installments;
   }
 

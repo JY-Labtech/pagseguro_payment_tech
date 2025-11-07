@@ -1,0 +1,82 @@
+plugins {
+    id 'com.android.library' version '8.12.1'
+}
+
+def flutterSdkPath = System.getenv("FLUTTER_SDK")
+if (flutterSdkPath == null || flutterSdkPath.trim().isEmpty()) {
+    throw new GradleException("A variável de ambiente FLUTTER_SDK precisa apontar para o diretório do Flutter SDK para compilar o AAR.")
+}
+
+def flutterEngineDir = file("${flutterSdkPath}/bin/cache/artifacts/engine")
+if (!flutterEngineDir.exists()) {
+    throw new GradleException("Não foi encontrado o diretório de artefatos do Flutter em ${flutterEngineDir}. Execute 'flutter precache --android' e tente novamente.")
+}
+
+def flutterJar = null
+flutterEngineDir.eachFileRecurse { candidate ->
+    if (candidate.name == "flutter.jar" && flutterJar == null) {
+        flutterJar = candidate
+    }
+}
+
+if (flutterJar == null) {
+    throw new GradleException("Não foi possível localizar flutter.jar. Execute 'flutter precache --android' ou informe manualmente o caminho via FLUTTER_SDK.")
+}
+
+group = "br.com.jylabtech.pagseguro_payment_tech"
+version = "1.0.0"
+
+repositories {
+    google()
+    mavenCentral()
+    maven {
+        url 'https://github.com/pagseguro/PlugPagServiceWrapper/raw/master'
+    }
+}
+
+android {
+    namespace "br.com.jylabtech.pagseguro_payment_tech"
+    compileSdk = 35
+
+    defaultConfig {
+        minSdk = 23
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildFeatures {
+        buildConfig = false
+    }
+
+    lint {
+        disable.add("InvalidPackage")
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+}
+
+dependencies {
+    compileOnly files(flutterJar)
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.21'
+    implementation 'com.google.dagger:dagger:2.38.1'
+    annotationProcessor 'com.google.dagger:dagger-compiler:2.38.1'
+    implementation 'io.reactivex.rxjava2:rxjava:2.1.16'
+    implementation 'io.reactivex.rxjava2:rxandroid:2.0.2'
+    implementation 'com.hannesdorfmann.mosby:mvp:2.0.1'
+    implementation 'com.android.support:design:28.0.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.30.52'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha05'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
