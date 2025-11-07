@@ -10,6 +10,8 @@ import 'package:pagseguro_payment_tech/src/payments/utils/payment_types.dart';
 final class Payment {
   final MethodChannel channel;
   PaymentHandler paymentHandler;
+  late String _licenceKey;
+  late String _licenceInternalKey;
 
   // Cache da instância criada
   static Payment? _instance;
@@ -17,30 +19,39 @@ final class Payment {
   Payment._({
     required this.channel,
     required this.paymentHandler,
-  });
+    required String licenceKey,
+    required String licenceInternalKey,
+  }) {
+    _licenceKey = licenceKey;
+    _licenceInternalKey = licenceInternalKey;
+  }
 
   /// Método factory assíncrono para criação controlada e validação da licença
   static Payment create({
     required MethodChannel channel,
     required PaymentHandler paymentHandler,
+    required String licenceKey,
+    required String licenceInternalKey,
   }) {
-    // Se já existe instância e licença validada, retorna ela diretamente
-    if (_instance != null) {
-      return _instance!;
+    if (_instance == null) {
+      final payment = Payment._(
+        channel: channel,
+        paymentHandler: paymentHandler,
+        licenceKey: licenceKey,
+        licenceInternalKey: licenceInternalKey,
+      );
+      payment.channel.setMethodCallHandler(payment._callHandler);
+      payment._configureLicence();
+      _instance = payment;
+    } else {
+      _instance!._licenceKey = licenceKey;
+      _instance!._licenceInternalKey = licenceInternalKey;
+      _instance!.paymentHandler = paymentHandler;
+      _instance!.channel.setMethodCallHandler(_instance!._callHandler);
+      _instance!._configureLicence();
     }
 
-    // Cria nova instância
-    final payment = Payment._(
-      channel: channel,
-      paymentHandler: paymentHandler,
-    );
-
-    // Salva instância e estado da licença validada
-    _instance = payment;
-
-    payment.channel.setMethodCallHandler(payment._callHandler);
-
-    return payment;
+    return _instance!;
   }
 
   void setHandler(PaymentHandler handler) {
@@ -48,8 +59,20 @@ final class Payment {
       throw Exception('Payment instance not initialized. Call Payment.create() first.');
     }
 
-    _instance?.paymentHandler = handler;
-    _instance?.channel.setMethodCallHandler(_instance?._callHandler);
+    _instance!._updateHandler(handler);
+  }
+
+  void _updateHandler(PaymentHandler handler) {
+    paymentHandler = handler;
+    channel.setMethodCallHandler(_callHandler);
+    _configureLicence();
+  }
+
+  void _configureLicence() {
+    channel.invokeMethod("initPayment", {
+      "licenceKey": _licenceKey,
+      "licenceInternalKey": _licenceInternalKey,
+    });
   }
 
   //Create external functions from invoke methodChannel

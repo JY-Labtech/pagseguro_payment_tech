@@ -29,12 +29,17 @@ class PagseguroPaymentTech {
   /// Inicializa o pagamento e registra o handler
   Payment initPayment({
     required PaymentHandler handler,
+    required String licenceKey,
+    required String licenceInternalKey,
   }) {
-    if (_payment != null) {
-      return _payment!;
-    }
-    _payment = Payment.create(channel: _channel, paymentHandler: handler);
-    return _payment!;
+    final payment = Payment.create(
+      channel: _channel,
+      paymentHandler: handler,
+      licenceKey: licenceKey,
+      licenceInternalKey: licenceInternalKey,
+    );
+    _payment = payment;
+    return payment;
   }
 
   /// Inicializa o NFC e registra o handler
@@ -43,6 +48,11 @@ class PagseguroPaymentTech {
   }) {
     if (_nfc != null) {
       return _nfc!;
+    }
+    if (_payment == null) {
+      throw Exception(
+        "Payment não inicializado.\nChame: PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: '...', licenceInternalKey: '...')",
+      );
     }
     _nfc = Nfc.internal(
       channel: _channel,
@@ -55,7 +65,7 @@ class PagseguroPaymentTech {
   Payment get payment {
     if (_payment == null) {
       throw Exception(
-        "Payment não inicializado.\nChame: PagseguroPaymentTech.instance.initPayment(handler)",
+        "Payment não inicializado.\nChame: PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: '...', licenceInternalKey: '...')",
       );
     }
     return _payment!;
@@ -64,7 +74,7 @@ class PagseguroPaymentTech {
   Nfc get nfc {
     if (_nfc == null) {
       throw Exception(
-        "NFC não inicializado.\nChame: PagseguroPaymentTech.instance.initNfc(handler)",
+        "NFC não inicializado.\nChame: PagseguroPaymentTech.I.initNfc(handler)",
       );
     }
     return _nfc!;

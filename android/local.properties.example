@@ -1,0 +1,8 @@
+sdk.dir=/caminho/para/android/sdk
+flutter.sdk=/caminho/para/flutter/sdk
+
+# As chaves de licença NÃO devem ser definidas neste arquivo.
+# Forneça licenceKey e licenceInternalKey diretamente no código
+# ao chamar PagseguroPaymentTech.I.initPayment(...).
+
+

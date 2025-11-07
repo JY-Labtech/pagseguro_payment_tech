@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
-
 import 'package:pagseguro_payment_tech/pagseguro_payment_tech.dart';
 
 import 'payment_controller.dart';
+
+const String _licenceKey = 'sua licenca aqui';
+const String _licenceInternalKey = '***REMOVIDO***';
 
 class PaymentPage extends StatefulWidget {
   const PaymentPage({Key? key}) : super(key: key);
@@ -21,9 +22,27 @@ class _PaymentPageState extends State<PaymentPage> {
 
   @override
   void initState() {
-    //Inicializar a classe handle para escutar os métodos e retornos da pagseguro
-    PagseguroPaymentTech.I.initPayment(handler: controller);
     super.initState();
+    _initializePayment();
+  }
+
+  void _initializePayment() {
+    assert(
+      _licenceKey.isNotEmpty && _licenceInternalKey.isNotEmpty,
+      'Defina PAGSEGURO_LICENCE_KEY e PAGSEGURO_LICENCE_INTERNAL_KEY via --dart-define.',
+    );
+
+    if (_licenceKey.isEmpty || _licenceInternalKey.isEmpty) {
+      throw StateError(
+        'Defina PAGSEGURO_LICENCE_KEY e PAGSEGURO_LICENCE_INTERNAL_KEY via --dart-define para executar o exemplo.',
+      );
+    }
+
+    PagseguroPaymentTech.I.initPayment(
+      handler: controller,
+      licenceKey: _licenceKey,
+      licenceInternalKey: _licenceInternalKey,
+    );
   }
 
   @override
