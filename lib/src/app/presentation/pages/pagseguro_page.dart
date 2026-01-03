@@ -105,6 +105,7 @@ class _PagseguroPageState extends State<PagseguroPage> {
       canPop: false,
       onPopInvokedWithResult: (_, __) {},
       child: Scaffold(
+        backgroundColor: _style.backgroundColor,
         body: SizedBox(
           child: Column(
             children: [
@@ -153,18 +154,22 @@ class _PagseguroPageState extends State<PagseguroPage> {
               ),
               Visibility(
                 visible: _controller.isVisibilityCancelButton,
-                child: ElevatedButton(
-                  onPressed: () {
-                    _controller.onAbortCurrentTransaction();
-                  },
-                  child: Padding(
-                    padding: const EdgeInsetsGeometry.symmetric(horizontal: 20),
-                    child: Text('Cancelar Pagamento', style: TextStyle(color: _style.buttonTextColor)),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _style.buttonColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  color: _style.backgroundColor,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      _controller.onAbortCurrentTransaction();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsetsGeometry.symmetric(horizontal: 20),
+                      child: Text('Cancelar Pagamento', style: TextStyle(color: _style.buttonTextColor)),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _style.buttonColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),

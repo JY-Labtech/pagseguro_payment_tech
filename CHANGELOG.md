@@ -1,3 +1,7 @@
+## 3.0.1
+
+- Atualiza classe de style para pagseguroPage
+
 ## 3.0.0
 
 - Encapsula toda a implementação Android em um módulo nativo (AAR privado).
