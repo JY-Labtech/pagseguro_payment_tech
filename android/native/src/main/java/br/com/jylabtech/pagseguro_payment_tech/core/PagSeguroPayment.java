@@ -52,6 +52,7 @@ public class PagSeguroPayment {
 
   private static final String GET_USER_DATA = "paymentGetUserData";
   private static final String STYLE_DIALOG = "paymentStyleDialog";
+  private static final String CALCULATE_INSTALLMENTS = "paymentCalculateInstallments";
 
   public PagSeguroPayment(Context context, MethodChannel channel) {
     this.context = context;
@@ -165,6 +166,19 @@ public class PagSeguroPayment {
       this.paymentsPresenter.getUserData();
       result.success(true);
       return;
+    }
+
+    if (call.method.equals(CALCULATE_INSTALLMENTS)) {
+      try {
+        String saleValue = call.argument("saleValue");
+        int installmentType = call.argument("installmentType");
+        java.util.List<java.util.Map<String, Object>> installments = this.paymentsPresenter.calculateInstallments(saleValue, installmentType);
+        result.success(installments);
+        return;
+      } catch (Exception e) {
+        result.error("ERROR", e.getMessage(), null);
+        return;
+      }
     }
 
     if (call.method.equals(PAYMENT_DEBIT)) {

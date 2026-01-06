@@ -56,8 +56,8 @@ Para utilizar este plugin, seu projeto Flutter precisa atender aos seguintes req
 
 - **Flutter SDK**: >= 3.0.0
 - **Dart SDK**: >= 3.0.0
-- **Gradle**: >= 8.12
-- **Android Gradle Plugin (AGP)**: >= 8.12.1
+- **Gradle**: >= 8.13
+- **Android Gradle Plugin (AGP)**: >= 8.13.1
 - **Kotlin**: >= 2.1.21
 - **compileSdk**: >= 35
 - **minSdk**: >= 23
@@ -67,12 +67,12 @@ Para utilizar este plugin, seu projeto Flutter precisa atender aos seguintes req
 
 #### 1. `android/gradle/wrapper/gradle-wrapper.properties`
 
-Certifique-se de que seu projeto está usando o Gradle 8.12 ou superior:
+Certifique-se de que seu projeto está usando o Gradle 8.13 ou superior:
 
 ```properties
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
-distributionUrl=https\://services.gradle.org/distributions/gradle-8.12-all.zip
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-all.zip
 zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
 ```
@@ -104,7 +104,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.12.1'
+        classpath 'com.android.tools.build:gradle:8.13.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
@@ -187,7 +187,7 @@ cd android
 ./gradlew --version
 ```
 
-Certifique-se de que a versão do Gradle exibida seja **8.12** ou superior.
+Certifique-se de que a versão do Gradle exibida seja **8.13** ou superior.
 
 ## 🚀 Tecnologias
 
