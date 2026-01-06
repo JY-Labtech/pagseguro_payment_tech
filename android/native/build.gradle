@@ -1,5 +1,11 @@
-plugins {
-    id 'com.android.library' version '8.13.1'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.1'
+    }
 }
 
 def flutterSdkPath = System.getenv("FLUTTER_SDK")
@@ -7,21 +13,47 @@ if (flutterSdkPath == null || flutterSdkPath.trim().isEmpty()) {
     throw new GradleException("A variável de ambiente FLUTTER_SDK precisa apontar para o diretório do Flutter SDK para compilar o AAR.")
 }
 
-def flutterEngineDir = file("${flutterSdkPath}/bin/cache/artifacts/engine")
-if (!flutterEngineDir.exists()) {
-    throw new GradleException("Não foi encontrado o diretório de artefatos do Flutter em ${flutterEngineDir}. Execute 'flutter precache --android' e tente novamente.")
+// Resolve link simbólico se necessário
+def flutterSdkFile = file(flutterSdkPath)
+if (flutterSdkFile.exists() && !flutterSdkFile.isDirectory()) {
+    flutterSdkPath = flutterSdkFile.canonicalPath
 }
 
+// Tenta múltiplos caminhos possíveis para o flutter.jar
 def flutterJar = null
-flutterEngineDir.eachFileRecurse { candidate ->
-    if (candidate.name == "flutter.jar" && flutterJar == null) {
-        flutterJar = candidate
+
+// Primeiro, tenta buscar recursivamente no diretório de artifacts
+def flutterEngineDir = file("${flutterSdkPath}/bin/cache/artifacts/engine")
+if (flutterEngineDir.exists()) {
+    def jarFiles = fileTree(dir: flutterEngineDir, include: '**/flutter.jar')
+    if (!jarFiles.isEmpty()) {
+        flutterJar = jarFiles.files.first()
+    }
+}
+
+// Se não encontrou, tenta caminhos específicos conhecidos
+if (flutterJar == null) {
+    def possiblePaths = [
+        "${flutterSdkPath}/bin/cache/artifacts/engine/android-x64/flutter.jar",
+        "${flutterSdkPath}/bin/cache/artifacts/engine/android-arm64/flutter.jar",
+        "${flutterSdkPath}/bin/cache/artifacts/engine/android-arm/flutter.jar",
+        "${flutterSdkPath}/bin/cache/artifacts/engine/android-x86/flutter.jar",
+    ]
+    
+    for (path in possiblePaths) {
+        def jarFile = file(path)
+        if (jarFile.exists()) {
+            flutterJar = jarFile
+            break
+        }
     }
 }
 
 if (flutterJar == null) {
-    throw new GradleException("Não foi possível localizar flutter.jar. Execute 'flutter precache --android' ou informe manualmente o caminho via FLUTTER_SDK.")
+    throw new GradleException("Não foi possível localizar flutter.jar em ${flutterSdkPath}/bin/cache/artifacts/engine. Execute 'flutter precache --android' ou verifique se FLUTTER_SDK está correto.")
 }
+
+apply plugin: 'com.android.library'
 
 group = "br.com.jylabtech.pagseguro_payment_tech"
 version = "1.0.0"

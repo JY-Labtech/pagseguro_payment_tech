@@ -1,4 +1,4 @@
-## 3.1.0
+## 3.1.1
 
 - Adiciona método `calculateInstallments` para calcular valores de parcelas
 - Cria modelo `PlugPagInstallment` com campos `quantity`, `amount` e `total`
