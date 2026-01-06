@@ -1,3 +1,18 @@
+## 3.1.0
+
+- Adiciona método `calculateInstallments` para calcular valores de parcelas
+- Cria modelo `PlugPagInstallment` com campos `quantity`, `amount` e `total`
+- Adiciona enum `InstallmentType` com valores `A_VISTA`, `PARC_VENDEDOR` e `PARC_COMPRADOR`
+- Implementa integração nativa com SDK PagSeguro para cálculo de parcelas
+- Método disponível em `PagseguroPaymentTech.I.payment.calculateInstallments(saleValue, installmentType)`
+- Atualiza Gradle de 8.12 para 8.13
+- Atualiza Android Gradle Plugin (AGP) de 8.12.1 para 8.13.1
+
+## 3.0.2
+
+- Atualiza Gradle de 8.12 para 8.13
+- Atualiza Android Gradle Plugin (AGP) de 8.12.1 para 8.13.1
+
 ## 3.0.1
 
 - Atualiza classe de style para pagseguroPage
@@ -11,7 +26,7 @@
 
 ## 2.1.0
 
-- Update plugin to use gradle 8.12
+- Update plugin to use gradle 8.12 (deprecated, use 8.13+)
 - Update Wrapper to version 1.30.52
 
 ## 2.0.1

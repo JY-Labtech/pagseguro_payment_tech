@@ -160,6 +160,7 @@ enum PaymentTypeCall {
   GET_SERIAL_NUMBER,
   GET_USER_DATA,
   STYLE_DIALOG,
+  CALCULATE_INSTALLMENTS,
 }
 
 enum PaymentTypeCredit {
@@ -173,6 +174,25 @@ extension PaymentTypeCreditExt on PaymentTypeCredit {
       case PaymentTypeCredit.SALESMAN:
         return 2;
       case PaymentTypeCredit.CLIENT:
+        return 3;
+    }
+  }
+}
+
+enum InstallmentType {
+  A_VISTA,
+  PARC_VENDEDOR,
+  PARC_COMPRADOR,
+}
+
+extension InstallmentTypeExt on InstallmentType {
+  get value {
+    switch (this) {
+      case InstallmentType.A_VISTA:
+        return 1;
+      case InstallmentType.PARC_VENDEDOR:
+        return 2;
+      case InstallmentType.PARC_COMPRADOR:
         return 3;
     }
   }
@@ -234,6 +254,8 @@ extension PaymentTypeCallExt on PaymentTypeCall {
         return 'paymentGetUserData';
       case PaymentTypeCall.STYLE_DIALOG:
         return 'paymentStyleDialog';
+      case PaymentTypeCall.CALCULATE_INSTALLMENTS:
+        return 'paymentCalculateInstallments';
     }
   }
 }

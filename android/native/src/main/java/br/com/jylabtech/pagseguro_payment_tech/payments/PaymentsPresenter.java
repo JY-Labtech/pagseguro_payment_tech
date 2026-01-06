@@ -6,6 +6,11 @@ import br.com.jylabtech.pagseguro_payment_tech.core.BaseResult;
 import br.com.jylabtech.pagseguro_payment_tech.core.UserDataResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagEventData;
+import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagInstallment;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import br.com.jylabtech.pagseguro_payment_tech.core.ActionResult;
 import com.google.gson.Gson;
 import io.flutter.plugin.common.MethodChannel;
@@ -280,6 +285,21 @@ public class PaymentsPresenter {
         UserDataResult result = this.mUseCase.getUserData();
         result.setMethod("userData");
         sendResponse(result);
+    }
+
+    public List<Map<String, Object>> calculateInstallments(String saleValue, int installmentType) throws Exception {
+        List<PlugPagInstallment> installments = this.mUseCase.calculateInstallments(saleValue, installmentType);
+        List<Map<String, Object>> resultList = new ArrayList<>();
+        
+        for (PlugPagInstallment installment : installments) {
+            Map<String, Object> installmentMap = new HashMap<>();
+            installmentMap.put("quantity", installment.getQuantity());
+            installmentMap.put("amount", installment.getAmount());
+            installmentMap.put("total", installment.getTotal());
+            resultList.add(installmentMap);
+        }
+        
+        return resultList;
     }
   
   public void dispose() {

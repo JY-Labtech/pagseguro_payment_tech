@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:pagseguro_payment_tech/src/licence/constants/licence_constants.dart';
 import 'package:pagseguro_payment_tech/src/payments/handler/payment_handler.dart';
 import 'package:pagseguro_payment_tech/src/payments/utils/payment_types.dart';
+import 'package:pagseguro_payment_tech/src/payments/utils/plugpag_installment.dart';
 
 //Fixed channel name
 
@@ -282,6 +283,44 @@ final class Payment {
   //Function to get user data
   Future<bool> getUserData() async {
     return await channel.invokeMethod(PaymentTypeCall.GET_USER_DATA.method);
+  }
+
+  //Function to calculate installments
+  // Calculate installment values for a given sale value and installment type
+  // saleValue: Value of the sale in cents (e.g., "2000" for R$ 20,00)
+  // installmentType: Type of installment (InstallmentType enum or int: 1=A_VISTA, 2=PARC_VENDEDOR, 3=PARC_COMPRADOR)
+  Future<List<PlugPagInstallment>> calculateInstallments(
+    String saleValue,
+    dynamic installmentType,
+  ) async {
+    try {
+      int typeValue;
+      if (installmentType is InstallmentType) {
+        typeValue = installmentType.value;
+      } else if (installmentType is int) {
+        typeValue = installmentType;
+      } else {
+        throw ArgumentError('installmentType must be InstallmentType or int');
+      }
+      
+      final result = await channel.invokeMethod(
+        PaymentTypeCall.CALCULATE_INSTALLMENTS.method,
+        {
+          "saleValue": saleValue,
+          "installmentType": typeValue,
+        },
+      );
+      
+      if (result is List) {
+        return result
+            .map((item) => PlugPagInstallment.fromMap(
+                Map<String, dynamic>.from(item as Map)))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
   }
 
   //Function to set dialog style

@@ -14,6 +14,7 @@ import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagPaymentData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagTransactionResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagUserDataResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagVoidData;
+import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagInstallment;
 import br.com.uol.pagseguro.plugpagservice.wrapper.data.request.PlugPagBeepData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.exception.PlugPagException;
 import br.com.jylabtech.pagseguro_payment_tech.core.ActionResult;
@@ -353,6 +354,11 @@ public class PaymentsUseCase {
     userResult.setAddressState(userDataResult.getAddressState());
     userResult.setEmail(userDataResult.getEmail());
     return userResult;
+  }
+
+  public java.util.List<PlugPagInstallment> calculateInstallments(String saleValue, int installmentType) throws Exception {
+    isValidLicence();
+    return mPlugPag.calculateInstallments(saleValue, installmentType);
   }
 
 
