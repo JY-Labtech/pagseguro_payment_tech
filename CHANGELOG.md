@@ -1,3 +1,7 @@
+## 3.2.1
+
+- Atualiza plugpagservice para 1.33.0
+
 ## 3.1.1
 
 - Adiciona método `calculateInstallments` para calcular valores de parcelas
