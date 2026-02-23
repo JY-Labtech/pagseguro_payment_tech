@@ -20,7 +20,7 @@
 Este projeto visa facilitar a integração com o SDK PagSeguro Smart no Flutter.
 Compatível apenas com máquinas POS Smart da PagSeguro.
 
-### PlugPagServiceWrapper: 1.30.52
+### PlugPagServiceWrapper: 1.33.0
 
 ## 🔐 Licenciamento
 
