@@ -99,24 +99,38 @@ class PagseguroResponseModel {
     };
   }
 
+  /// Lê o JSON enviado pelo nativo em `onFinishedResponse` (ActionResult do plugin).
+  ///
+  /// Tolerante a tipos: números ou textos nos campos são aceitos (ex.: `amount` como `2590` ou
+  /// `"2590"`), e campos ausentes/nulos ficam `null`. O nativo envia `transactionId`; a chave
+  /// antiga `transactionID` continua aceita (antes só ela era lida e o id sempre vinha `null`).
   factory PagseguroResponseModel.fromMap(Map<String, dynamic> map) {
     return PagseguroResponseModel(
-      cardBin: map['bin'] != null ? map['bin'] as String : null,
-      cardBrand: map['cardBrand'] != null ? map['cardBrand'] as String : null,
-      resultCode: map['result'] != null ? map['result'] as int : null,
-      errorCode: map['errorCode'] != null ? map['errorCode'] as String : null,
-      amount: map['amount'] != null ? map['amount'] as String : null,
-      hostNSU: map['hostNsu'] != null ? map['hostNsu'] as String : null,
-      nsu: map['nsu'] != null ? map['nsu'] as String : null,
-      transactionID: map['transactionID'] != null ? map['transactionID'] as String : null,
-      transactionCode: map['transactionCode'] != null ? map['transactionCode'] as String : null,
-      date: map['date'] != null ? map['date'] as String : null,
-      time: map['time'] != null ? map['time'] as String : null,
-      terminalSerialNumber: map['terminalSerialNumber'] != null ? map['terminalSerialNumber'] as String : null,
-      message: map['message'] != null ? map['message'] as String : null,
-      errorMessage: map['errorMessage'] != null ? map['errorMessage'] as String : null,
-      paymentType: map['paymentType'] != null ? map['paymentType'] as int : null,
+      cardBin: _asString(map['bin'] ?? map['cardBin']),
+      cardBrand: _asString(map['cardBrand']),
+      resultCode: _asInt(map['result'] ?? map['resultCode']),
+      errorCode: _asString(map['errorCode']),
+      amount: _asString(map['amount']),
+      hostNSU: _asString(map['hostNsu'] ?? map['hostNSU']),
+      nsu: _asString(map['nsu']),
+      transactionID: _asString(map['transactionId'] ?? map['transactionID']),
+      transactionCode: _asString(map['transactionCode']),
+      date: _asString(map['date']),
+      time: _asString(map['time']),
+      terminalSerialNumber: _asString(map['terminalSerialNumber']),
+      message: _asString(map['message']),
+      errorMessage: _asString(map['errorMessage']),
+      paymentType: _asInt(map['paymentType']),
     );
+  }
+
+  static String? _asString(dynamic value) => value?.toString();
+
+  static int? _asInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
   }
 
   String toJson() => json.encode(toMap());

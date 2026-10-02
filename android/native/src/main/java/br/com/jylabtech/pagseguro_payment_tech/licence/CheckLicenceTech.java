@@ -2,236 +2,120 @@ package br.com.jylabtech.pagseguro_payment_tech.licence;
 
 
 import android.content.Context;
-import android.content.SharedPreferences;
-
-import androidx.security.crypto.EncryptedSharedPreferences;
-import androidx.security.crypto.MasterKey;
 
 import java.util.Date;
-import java.util.Objects;
-import java.util.concurrent.TimeUnit;
-import java.nio.charset.StandardCharsets;
-import android.util.Log;
 
 
+/**
+ * Fluxo de validação de licença: cache offline válido primeiro, depois o servidor oficial.
+ * Não chama nada de UI: pode (e deve) ser executado fora da main thread.
+ */
 public class CheckLicenceTech {
 
-    private static final String PREFS_NAME = "licence_prefs_encrypted";
-    private static final String KEY_JSON = "licence_entity";
+    /** Relógio injetável para testes. */
+    public interface Clock {
+        Date now();
+    }
 
-    private final Context context;
-
-
-    private final LicenceProvider licenceProvider;
+    private final LicenceStorage storage;
+    private final LicenceRemote remote;
+    private final Clock clock;
 
     public CheckLicenceTech(Context context) {
-        this.context = context;
-        this.licenceProvider = new LicenceProvider(context);
+        this(new EncryptedLicenceStorage(context), new LicenceProvider(context), new Clock() {
+            @Override
+            public Date now() {
+                return new Date();
+            }
+        });
+    }
+
+    public CheckLicenceTech(LicenceStorage storage, LicenceRemote remote, Clock clock) {
+        this.storage = storage;
+        this.remote = remote;
+        this.clock = clock;
     }
 
     /**
-     * Valida a licença chamando a API e salva localmente se sucesso.
+     * Valida a licença: usa o cache se ainda for válido; senão consulta o servidor
+     * e salva o cache novo somente se a licença estiver válida e ativa.
      */
     public LicenceResult validateLicence(String licenceKey, String licenceInternalKey) {
-        LicenceResult licenceResult = new LicenceResult();
-        licenceResult.setMethod("licence");
-        try {
-            boolean licenceDatabase = validateLicenceDatabase(licenceKey, licenceInternalKey);
-            if(licenceDatabase) {
-                licenceResult.setResult(0);
-                return licenceResult;
-            }
-
-            String apiUrl = sanitizeUrl(licenceInternalKey);
-            // Chama o provider que já pega deviceId, serialNumber e uuid internamente
-            LicenceResult licence = licenceProvider.checkLicence(apiUrl, licenceKey);
-            if (licence != null && licence.getResult() == 0) {
-                boolean isValidLicence = validateLicenceServer(licence.getLicenceEntity());
-                if(isValidLicence) {
-                    CheckLicenceEntity entity = licence.getLicenceEntity();
-                    entity.setLicenceInternalKey(licenceInternalKey);
-                    saveLicenceEncrypted(entity);
-                    licenceResult.setResult(0);
-                    licenceResult.setLicenceEntity(entity);
-                }
-            } else {
-                return licence;
-            }
-
-            return licenceResult;
-        } catch (Exception e) {
-            licenceResult.setResult(999999);
-            licenceResult.setErrorMessage(e.getMessage());
-            e.printStackTrace();
+        if (licenceKey == null || licenceKey.trim().isEmpty()) {
+            return LicenceResult.error("Licença não configurada. Informe a licenceKey em initPayment.");
         }
-        return licenceResult;
+        String key = licenceKey.trim();
+        String url = LicenceRules.resolveLicenceUrl(licenceInternalKey);
+        Date now = clock.now();
+
+        CheckLicenceEntity cached = readCacheSafely();
+        if (cached != null) {
+            if (LicenceRules.isCacheUsable(cached, key, url, now)) {
+                return LicenceResult.success(cached);
+            }
+            deleteCacheSafely();
+        }
+
+        LicenceResult remoteResult;
+        try {
+            remoteResult = remote.check(url, key);
+        } catch (Exception e) {
+            String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            return LicenceResult.error("Não foi possível validar a licença: " + detail);
+        }
+
+        if (remoteResult == null) {
+            return LicenceResult.error("Não foi possível validar a licença.");
+        }
+        if (!remoteResult.isSuccess()) {
+            if (remoteResult.getErrorMessage() == null || remoteResult.getErrorMessage().isEmpty()) {
+                remoteResult.setErrorMessage("Licença não ativada.");
+            }
+            return remoteResult;
+        }
+
+        CheckLicenceEntity entity = remoteResult.getLicenceEntity();
+        if (!LicenceRules.isLicenceUsable(entity, now)) {
+            return LicenceResult.error(LicenceRules.describeUnusable(entity, now));
+        }
+
+        entity.setLicenceInternalKey(url);
+        entity.setSavedLocalDatabaseAt(now);
+        try {
+            storage.save(entity);
+        } catch (Exception ignored) {
+            // Falha ao salvar o cache não invalida a licença recém-validada.
+        }
+        return LicenceResult.success(entity);
     }
 
+    /**
+     * Confere apenas o cache local (sem rede). Usado como segunda barreira nas operações.
+     */
     public boolean validateExistsLicence() {
-        boolean aux = false;
-        Date now = new Date();
-
-        try {
-            CheckLicenceEntity licenceDatabase = getLicenceEncrypted();
-            if(licenceDatabase!= null) {
-                if(licenceDatabase.getExpiredAt().after(now)) {
-                    aux = true;
-                }
-                if(licenceDatabase.isExpired() || licenceDatabase.isInactive()) {
-                    aux = false;
-                }
-                if(licenceDatabase.getSavedLocalDatabaseAt() != null) {
-                    long diffInMillis = now.getTime() - licenceDatabase.getSavedLocalDatabaseAt().getTime();
-                    long diffInDays = TimeUnit.MILLISECONDS.toDays(diffInMillis);
-                    if (diffInDays > 7) {
-                        deleteLicenceDatabase();
-                        aux = false;
-                    }
-                }
-            }
-            return aux;
-        } catch (Exception e) {
-            e.printStackTrace();
+        CheckLicenceEntity cached = readCacheSafely();
+        if (cached == null) {
             return false;
         }
-    }
-
-    private boolean validateLicenceServer(CheckLicenceEntity entity) {
-        boolean aux = false;
-        Date now = new Date();
-        if(entity.getExpiredAt().after(now)) {
-            aux = true;
-        }
-
-        if(entity.isExpired() || entity.isInactive()) {
-            aux = false;
-        }
-
-        return aux;
-    }
-
-    private boolean validateLicenceDatabase(String licenceKey, String licenceInternalKey) {
-        boolean aux = false;
-        Date now = new Date();
-
-        try {
-            CheckLicenceEntity licenceDatabase = getLicenceEncrypted();
-            if(licenceDatabase!= null) {
-                if(licenceDatabase.getExpiredAt().after(now)) {
-                    aux = true;
-                }
-                if(licenceDatabase.isExpired() || licenceDatabase.isInactive()) {
-                    aux = false;
-                }
-                if(licenceDatabase.getSavedLocalDatabaseAt() != null) {
-                    long diffInMillis = now.getTime() - licenceDatabase.getSavedLocalDatabaseAt().getTime();
-                    long diffInDays = TimeUnit.MILLISECONDS.toDays(diffInMillis);
-                    if (diffInDays > 7) {
-                        deleteLicenceDatabase();
-                        aux = false;
-                    }
-                }
-
-                if(!Objects.equals(licenceDatabase.getLicenceEncrypt(), licenceKey)) {
-                    aux = false;
-                }
-
-                if(!Objects.equals(licenceDatabase.getLicenceInternalKey(), licenceInternalKey)) {
-                    deleteLicenceDatabase();
-                    aux = false;
-                }
-            }
-            return aux;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    /**
-     * Salva a entidade de licença localmente de forma criptografada.
-     */
-    private boolean saveLicenceEncrypted(CheckLicenceEntity entity) {
-        try {
-            entity.setSavedLocalDatabaseAt(new Date());
-
-            MasterKey masterKey = new MasterKey.Builder(context)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build();
-
-            SharedPreferences prefs = EncryptedSharedPreferences.create(
-                    context,
-                    PREFS_NAME,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            );
-
-            prefs.edit().putString(KEY_JSON, entity.toJson()).apply();
+        if (LicenceRules.isCacheFresh(cached, clock.now())) {
             return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
         }
+        deleteCacheSafely();
+        return false;
     }
 
-    /**
-     * Recupera a licença salva localmente de forma criptografada.
-     */
-    private CheckLicenceEntity getLicenceEncrypted() {
+    private CheckLicenceEntity readCacheSafely() {
         try {
-            MasterKey masterKey = new MasterKey.Builder(context)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build();
-
-            SharedPreferences prefs = EncryptedSharedPreferences.create(
-                    context,
-                    PREFS_NAME,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            );
-
-            String savedJson = prefs.getString(KEY_JSON, null);
-            if (savedJson != null) {
-                return CheckLicenceEntity.fromJson(savedJson);
-            }
+            return storage.read();
         } catch (Exception e) {
-            e.printStackTrace();
+            return null;
         }
-        return null;
     }
 
-    private void deleteLicenceDatabase() {
+    private void deleteCacheSafely() {
         try {
-            // Cria ou recupera a chave mestre de forma segura
-            MasterKey masterKey = new MasterKey.Builder(context)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build();
-
-            // Acessa o SharedPreferences criptografado
-            SharedPreferences prefs = EncryptedSharedPreferences.create(
-                    context,
-                    PREFS_NAME,
-                    masterKey,                  // chave mestre
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            );
-
-            // Remove a licença salva
-            prefs.edit().remove(KEY_JSON).apply();
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private String sanitizeUrl(String data) {
-        if (data.contains("http")) {
-            return data;
-        } else {
-            byte[] decodedBytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT);
-            return new String(decodedBytes, StandardCharsets.UTF_8);
+            storage.delete();
+        } catch (Exception ignored) {
         }
     }
 }

@@ -1,3 +1,4 @@
+// ignore_for_file: constant_identifier_names
 //Fixed payment type hanldle from return functions
 enum PaymentTypeHandler {
   ON_TRANSACTION_SUCCESS,
@@ -25,9 +26,12 @@ enum PaymentTypeHandler {
   SHOW_ERROR_REFUND_NFC,
 }
 
+/// Nome do evento enviado pelo nativo -> [PaymentTypeHandler]. Lança para nomes desconhecidos.
 extension StringPaymentHandlerExt on String {
-  get handler {
+  PaymentTypeHandler get handler {
     switch (this) {
+      // O nativo envia "onTransactionSuccess"; "onTransactionSucess" é a grafia antiga do Dart.
+      case "onTransactionSuccess":
       case "onTransactionSucess":
         return PaymentTypeHandler.ON_TRANSACTION_SUCCESS;
       case "onError":
@@ -80,11 +84,12 @@ extension StringPaymentHandlerExt on String {
   }
 }
 
+/// Nome do método usado pelo nativo para cada evento.
 extension PaymentTypeHandlerExt on PaymentTypeHandler {
-  get method {
+  String get method {
     switch (this) {
       case PaymentTypeHandler.ON_TRANSACTION_SUCCESS:
-        return "onTransactionSucess";
+        return "onTransactionSuccess";
       case PaymentTypeHandler.ON_ERROR:
         return "onError";
       case PaymentTypeHandler.ON_MESSAGE:
@@ -128,6 +133,7 @@ extension PaymentTypeHandlerExt on PaymentTypeHandler {
       case PaymentTypeHandler.SHOW_ERROR_DEBIT_NFC:
         return "showErrorDebitNfc";
       case PaymentTypeHandler.SHOW_ERROR_REFUND_NFC:
+        return "showErrorRefundNfc";
     }
   }
 }
@@ -161,6 +167,7 @@ enum PaymentTypeCall {
   GET_USER_DATA,
   STYLE_DIALOG,
   CALCULATE_INSTALLMENTS,
+  SET_PRINT_DIALOG_MAX_TIME,
 }
 
 enum PaymentTypeCredit {
@@ -169,7 +176,7 @@ enum PaymentTypeCredit {
 }
 
 extension PaymentTypeCreditExt on PaymentTypeCredit {
-  get value {
+  int get value {
     switch (this) {
       case PaymentTypeCredit.SALESMAN:
         return 2;
@@ -186,7 +193,7 @@ enum InstallmentType {
 }
 
 extension InstallmentTypeExt on InstallmentType {
-  get value {
+  int get value {
     switch (this) {
       case InstallmentType.A_VISTA:
         return 1;
@@ -200,7 +207,7 @@ extension InstallmentTypeExt on InstallmentType {
 
 //Fixed method to call on methodChannel
 extension PaymentTypeCallExt on PaymentTypeCall {
-  get method {
+  String get method {
     switch (this) {
       case PaymentTypeCall.CREDIT:
         return "paymentCredit";
@@ -256,6 +263,8 @@ extension PaymentTypeCallExt on PaymentTypeCall {
         return 'paymentStyleDialog';
       case PaymentTypeCall.CALCULATE_INSTALLMENTS:
         return 'paymentCalculateInstallments';
+      case PaymentTypeCall.SET_PRINT_DIALOG_MAX_TIME:
+        return 'paymentSetPrintDialogMaxTime';
     }
   }
 }
@@ -272,7 +281,7 @@ enum PaymentType {
 }
 
 extension PaymentTypeExt on PaymentType {
-  get value {
+  int get value {
     switch (this) {
       case PaymentType.TYPE_CREDITO:
         return 1;

@@ -422,14 +422,14 @@ public class ActionResult extends BaseResult{
     setLabel(result.getLabel());
     setHolderName(result.getHolderName());
     setExtendedHolderName(result.getExtendedHolderName());
-    setResult(result.getResult());
+    setResult(intOrZero(result.getResult()));
     setReaderModel(result.getReaderModel());
     setNsu(result.getNsu());
     setAutoCode(result.getAutoCode());
     setInstallments(result.getInstallments());
-    setOriginalAmount(result.getOriginalAmount());
+    setOriginalAmount(intOrZero(result.getOriginalAmount()));
     setBuyerName(result.getBuyerName());
-    setPaymentType(result.getPaymentType());
+    setPaymentType(intOrZero(result.getPaymentType()));
     setTypeTransaction(result.getTypeTransaction());
     setAppIdentification(result.getAppIdentification());
     setCardHash(result.getCardHash());
@@ -444,5 +444,13 @@ public class ActionResult extends BaseResult{
     setPartialPayPartiallyAuthorizedAmount(result.getPartialPayPartiallyAuthorizedAmount());
     setPartialPayRemainingAmount(result.getPartialPayRemainingAmount());
     this.isBuildResponse = 1;
+  }
+
+  /**
+   * O SDK devolve Integer (pode ser null, ex.: estorno/última transação); desembrulhar direto
+   * para int lançava NullPointerException e transformava um resultado válido em erro.
+   */
+  static int intOrZero(Integer value) {
+    return value != null ? value : 0;
   }
 }

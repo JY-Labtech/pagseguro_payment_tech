@@ -23,7 +23,4 @@ public interface NFCContract  {
     void showErrorRefundNfc(String message);
     void showError(String message);
 
-    void onReadCard();
-    void onWriteCard();
-    void onAbort();
 }

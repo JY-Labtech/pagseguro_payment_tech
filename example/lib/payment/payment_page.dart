@@ -4,8 +4,12 @@ import 'package:pagseguro_payment_tech/pagseguro_payment_tech.dart';
 
 import 'payment_controller.dart';
 
-const String _licenceKey = 'sua licenca aqui';
-const String _licenceInternalKey = 'aHR0cHM6Ly9wb3MtcGF5bWVudHMtYXBpLTU3NzQ2NDIzNTQwOC5zb3V0aGFtZXJpY2EtZWFzdDEucnVuLmFwcC9wb3MtcGF5bWVudHMvbGljZW5jZS9jaGVjay9pbnZvaWNl';
+const String _licenceKey = String.fromEnvironment('PAGSEGURO_LICENCE_KEY', defaultValue: 'sua licenca aqui');
+// https://portal-api.jylabtech.com.br/pos-payments/licence/check/invoice
+const String _licenceInternalKey = String.fromEnvironment(
+  'PAGSEGURO_LICENCE_INTERNAL_KEY',
+  defaultValue: 'aHR0cHM6Ly9wb3J0YWwtYXBpLmp5bGFidGVjaC5jb20uYnIvcG9zLXBheW1lbnRzL2xpY2VuY2UvY2hlY2svaW52b2ljZQ==',
+);
 
 class PaymentPage extends StatefulWidget {
   const PaymentPage({Key? key}) : super(key: key);

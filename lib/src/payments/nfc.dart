@@ -1,7 +1,9 @@
 // ignore_for_file: constant_identifier_names
 import 'package:flutter/services.dart';
+import 'package:pagseguro_payment_tech/src/payments/handler/event_dispatcher.dart';
 import 'package:pagseguro_payment_tech/src/payments/handler/nfc_handler.dart';
 import 'package:pagseguro_payment_tech/src/payments/payment.dart';
+import 'package:pagseguro_payment_tech/src/payments/utils/input_validation.dart';
 import 'package:pagseguro_payment_tech/src/payments/utils/payment_types.dart';
 
 const CHANNEL_NFC_NAME = "pagseguro_payment_tech";
@@ -25,9 +27,12 @@ final class Nfc {
     required NfcHandler nfcHandler,
     Payment? payment,
   }) {
-    // Se já existe instância e licença validada, retorna ela diretamente
-    if (_instance != null) {
-      return _instance!;
+    // Instância já criada: atualiza o handler (antes o novo handler era ignorado).
+    final current = _instance;
+    if (current != null) {
+      current._nfcHandler = nfcHandler;
+      PagseguroEventDispatcher.attachNfc(current._channel, nfcHandler);
+      return current;
     }
 
     final nfc = Nfc._internal(
@@ -36,8 +41,16 @@ final class Nfc {
     );
 
     _instance = nfc;
-    nfc._channel.setMethodCallHandler(nfc._callHandler);
+    PagseguroEventDispatcher.attachNfc(nfc._channel, nfcHandler);
     return nfc;
+  }
+
+  /// Handler que recebe os eventos NFC.
+  NfcHandler get handler => _nfcHandler;
+
+  /// Limpa a instância em cache (uso interno: PagseguroPaymentTech.resetForTesting).
+  static void resetForTesting() {
+    _instance = null;
   }
 
   void setHandler(NfcHandler handler) {
@@ -45,12 +58,14 @@ final class Nfc {
       throw Exception('Payment instance not initialized. Call Payment.create() first.');
     }
 
-    _instance?._nfcHandler = handler;
-    _instance?._channel.setMethodCallHandler(_instance?._callHandler);
+    _instance!._nfcHandler = handler;
+    PagseguroEventDispatcher.attachNfc(_instance!._channel, handler);
   }
 
+  /// Para de entregar eventos ao [NfcHandler]. Os eventos de pagamento continuam chegando ao
+  /// `PaymentHandler` (antes, o canal inteiro ficava sem handler).
   void closeMethodCallHandler() {
-    _channel.setMethodCallHandler(null);
+    PagseguroEventDispatcher.detachNfc();
   }
 
   Future<bool> _invoke(String method, [Map<String, dynamic>? arguments]) async {
@@ -65,14 +80,17 @@ final class Nfc {
 
   Future<bool> lastTransaction() => _invoke(PaymentTypeCall.LAST_TRANSACTION.method);
 
+  /// Estorno: código/id vazios lançam `PlatformException(code: 'INVALID_ARGUMENT')` sem chamar o nativo.
   Future<bool> refund({
     required String transactionCode,
     required String transactionId,
-  }) =>
-      _invoke(PaymentTypeCall.REFUND.method, {
+  }) async {
+    checkRefundArguments(transactionCode, transactionId);
+    return _invoke(PaymentTypeCall.REFUND.method, {
         "transactionCode": transactionCode,
         "transactionId": transactionId,
       });
+  }
 
   Future<bool> readNfc(dynamic idEvento) => _invoke(PaymentTypeCall.READ_NFC.method, {"idEvento": idEvento});
 
@@ -93,84 +111,4 @@ final class Nfc {
   Future<bool> formatNfc() => _invoke(PaymentTypeCall.FORMAT_NFC.method);
 
   Future<bool> debitNfc(dynamic idEvento, dynamic valor) => _invoke(PaymentTypeCall.DEBIT_NFC.method, {"idEvento": idEvento, "valor": valor});
-
-  Future<dynamic> _callHandler(MethodCall call) async {
-    switch (call.method.handler) {
-      case PaymentTypeHandler.ON_TRANSACTION_SUCCESS:
-        _nfcHandler.onTransactionSuccess();
-        break;
-      case PaymentTypeHandler.ON_ERROR:
-        _nfcHandler.onError(call.arguments);
-        break;
-      case PaymentTypeHandler.ON_MESSAGE:
-        _nfcHandler.onMessage(call.arguments);
-        break;
-      case PaymentTypeHandler.ON_LOADING:
-        _nfcHandler.onLoading(call.arguments);
-        break;
-      case PaymentTypeHandler.WRITE_TO_FILE:
-        _nfcHandler.writeToFile(
-          transactionCode: call.arguments['transactionCode'],
-          transactionId: call.arguments['transactionId'],
-        );
-        break;
-      case PaymentTypeHandler.ON_ABORTED_SUCCESSFULLY:
-        _nfcHandler.onAbortedSuccessfully();
-        break;
-      case PaymentTypeHandler.DISPOSE_DIALOG:
-        _nfcHandler.disposeDialog();
-        break;
-      case PaymentTypeHandler.ACTIVE_DIALOG:
-        _nfcHandler.onActivationDialog();
-        break;
-      case PaymentTypeHandler.ON_AUTH_PROGRESS:
-        _nfcHandler.onAuthProgress(call.arguments);
-        break;
-      case PaymentTypeHandler.ON_TRANSACTION_INFO:
-        _nfcHandler.onTransactionInfo(
-          transactionCode: call.arguments['transactionCode'],
-          transactionId: call.arguments['transactionId'],
-        );
-        break;
-      case PaymentTypeHandler.SHOW_SUCCESS:
-        _nfcHandler.showSuccess(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_SUCCESS_WRITE:
-        _nfcHandler.showSuccessWrite(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_SUCCESS_RE_WRITE:
-        _nfcHandler.showSuccessReWrite(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_SUCCESS_DEBIT_NFC:
-        _nfcHandler.showSuccessDebitNfc(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_SUCCESS_REFUND_NFC:
-        _nfcHandler.showSuccessRefundNfc(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_SUCCESS_FORMAT:
-        _nfcHandler.showSuccessFormat(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_ERROR_READ:
-        _nfcHandler.showErrorRead(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_ERROR_WRITE:
-        _nfcHandler.showErrorWrite(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_ERROR_RE_WRITE:
-        _nfcHandler.showErrorReWrite(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_ERROR_FORMAT:
-        _nfcHandler.showErrorFormat(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_ERROR_DEBIT_NFC:
-        _nfcHandler.showErrorDebitNfc(call.arguments);
-        break;
-      case PaymentTypeHandler.SHOW_ERROR_REFUND_NFC:
-        _nfcHandler.showErrorRefundNfc(call.arguments);
-        break;
-      default:
-        throw "METHOD NOT IMPLEMENTED";
-    }
-    return true;
-  }
 }

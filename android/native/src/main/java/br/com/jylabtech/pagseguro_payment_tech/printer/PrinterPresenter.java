@@ -1,5 +1,6 @@
 package br.com.jylabtech.pagseguro_payment_tech.printer;
 
+import android.content.Context;
 import android.util.Log;
 
 import java.io.FileNotFoundException;
@@ -24,7 +25,11 @@ public class PrinterPresenter implements Disposable {
 
     @Inject
     public PrinterPresenter(PlugPag plugPag, MethodChannel channel) {
-        this.mUseCase = new PrinterUsecase(plugPag, channel);
+        this(plugPag, channel, null);
+    }
+
+    public PrinterPresenter(PlugPag plugPag, MethodChannel channel, Context context) {
+        this.mUseCase = new PrinterUsecase(plugPag, channel, context);
         this.mFragment = new PaymentsFragment(channel);
     }
 
@@ -122,6 +127,6 @@ public class PrinterPresenter implements Disposable {
 
     @Override
     public boolean isDisposed() {
-        return false;
+        return mSubscribe == null || mSubscribe.isDisposed();
     }
 }
