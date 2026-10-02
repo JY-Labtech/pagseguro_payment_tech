@@ -5,134 +5,91 @@ import android.content.Context;
 import android.os.Build;
 import android.provider.Settings;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import android.util.Log;
-public class LicenceProvider {
+
+/**
+ * Cliente HTTP do servidor de licença. Síncrono: deve ser chamado fora da main thread.
+ */
+public class LicenceProvider implements LicenceRemote {
 
     private final Context context;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public LicenceProvider(Context context) {
         this.context = context;
     }
 
+    @Override
+    public LicenceResult check(String urlString, String licenceKey) throws Exception {
+        return checkLicence(urlString, licenceKey);
+    }
+
     /**
-     * Faz a requisição POST de forma assíncrona usando ExecutorService.
-     * Bloqueia a chamada atual até completar.
+     * Faz o POST no servidor oficial de licença e decide o resultado via {@link LicenceRules}.
      */
     public LicenceResult checkLicence(final String urlString, final String licenceKey) throws Exception {
-        LicenceResult licenceResult = new LicenceResult();
-        licenceResult.setMethod("licence");
-
-        Callable<LicenceResult> task = new Callable<LicenceResult>() {
-            @Override
-            public LicenceResult call() throws Exception {
-                HttpURLConnection connection = null;
-                try {
-                    String deviceId = getAndroidId();
-                    String deviceUid = getSerialNumber();
-                    String deviceLocalId = getDeviceUUID();
-                    String deviceName = Build.MODEL;
-
-                    URL url = new URL(urlString);
-                    connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestMethod("POST");
-                    connection.setRequestProperty("Content-Type", "application/json");
-
-                    if (!licenceKey.isEmpty()) {
-                        connection.setRequestProperty("Authorization", "Bearer licence:" + licenceKey);
-                    }
-
-                    connection.setDoOutput(true);
-
-                    JSONObject body = new JSONObject();
-                   body.put("deviceId", deviceId);
-                   body.put("deviceUid", deviceUid);
-                   body.put("deviceLocalId", deviceLocalId);
-                   body.put("deviceName", deviceName);
-
-                    OutputStream os = connection.getOutputStream();
-                    os.write(body.toString().getBytes("UTF-8"));
-                    os.flush();
-                    os.close();
-
-                    int responseCode = connection.getResponseCode();
-                    BufferedReader reader;
-
-                    if (responseCode == HttpURLConnection.HTTP_OK) {
-                        reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                        StringBuilder responseStr = new StringBuilder();
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            responseStr.append(line);
-                        }
-                        reader.close();
-
-                        licenceResult.setResult(0);
-                        licenceResult.setLicenceEntity(CheckLicenceEntity.fromJson(responseStr.toString()));
-
-                        return licenceResult;
-                    } else {
-
-                        licenceResult.setResult(999999);
-                        licenceResult.setErrorMessage(handleErrors(connection));
-
-                        return licenceResult;
-                    }
-
-                } finally {
-                    if (connection != null) {
-                        connection.disconnect();
-                    }
-                }
-            }
-        };
-
-        Future<LicenceResult> future = executor.submit(task);
+        // Defesa extra: nunca consulta um host fora do servidor oficial.
+        String safeUrl = LicenceRules.resolveLicenceUrl(urlString);
+        HttpURLConnection connection = null;
         try {
-            return future.get(); // aguarda a execução completa
-        } catch (ExecutionException e) {
+            JSONObject body = new JSONObject();
+            body.put("deviceId", getAndroidId());
+            body.put("deviceUid", getSerialNumber());
+            body.put("deviceLocalId", getDeviceUUID());
+            body.put("deviceName", Build.MODEL);
 
-            throw e.getCause() != null ? (Exception) e.getCause() : e;
+            URL url = new URL(safeUrl);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(LicenceConfig.CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(LicenceConfig.READ_TIMEOUT_MS);
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("Authorization", "Bearer licence:" + licenceKey);
+            connection.setDoOutput(true);
+
+            OutputStream os = connection.getOutputStream();
+            os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            os.flush();
+            os.close();
+
+            int responseCode = connection.getResponseCode();
+            InputStream stream = responseCode >= 200 && responseCode < 300
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+            String responseBody = readFully(stream);
+
+            return LicenceRules.evaluateHttpResponse(responseCode, responseBody, new Date());
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 
-    private String handleErrors(HttpURLConnection connection) throws Exception {
-        String errorMessage = "Erro interno";
-        int statusCode = connection.getResponseCode();
-        
-        BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
-        StringBuilder responseStr = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            responseStr.append(line);
+    private static String readFully(InputStream stream) {
+        if (stream == null) {
+            return null;
         }
-        reader.close();
-
-        String message = null;
-        try {
-            JSONObject json = new JSONObject(responseStr.toString());
-            message = json.optString("message", null);
-            errorMessage = message;
-        } catch (JSONException e) {
-            errorMessage = e.getMessage();
-            Log.d("print", "*ExceptionMessageError: " + e.getMessage());
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            StringBuilder responseStr = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                responseStr.append(line);
+            }
+            return responseStr.toString();
+        } catch (Exception e) {
+            return null;
         }
-
-        return errorMessage;
     }
 
     @SuppressLint("HardwareIds")
@@ -140,6 +97,7 @@ public class LicenceProvider {
         return Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
     }
 
+    @SuppressLint("HardwareIds")
     private String getSerialNumber() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

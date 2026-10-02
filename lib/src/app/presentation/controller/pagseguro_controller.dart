@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:flutter/services.dart';
 import 'package:pagseguro_payment_tech/src/payments/pagseguro_payment_tech.dart';
+import 'package:pagseguro_payment_tech/src/payments/payment.dart';
 import 'package:pagseguro_payment_tech/src/payments/utils/payment_types.dart';
 
 import '../enum/pagseguro_payment_type.dart' show PagseguroPaymentType;
@@ -15,12 +18,13 @@ class PagseguroController {
   PagseguroOptions? _options;
 
   PagseguroPaymentType _paymentType = PagseguroPaymentType.unknow;
-  double _amount = 0;
+  int _amountInCents = 0;
   int _parcels = 1;
   bool _isActivePinpad = false;
   bool isVisibilityCancelButton = false;
   bool _isAbortTransaction = false;
   PaymentTypeCredit _creditType = PaymentTypeCredit.CLIENT;
+  Function(PagseguroResponseModel?)? _onPopResult;
 
   void setVisibilityCancelButton(bool value) {
     isVisibilityCancelButton = value;
@@ -38,7 +42,7 @@ class PagseguroController {
     await Future.delayed(const Duration(seconds: 1));
     try {
       _paymentType = params.type;
-      _amount = params.amount;
+      _amountInCents = params.amountInCentsOrRounded;
       _parcels = params.parcels ?? 1;
       _creditType = params.creditType ?? PaymentTypeCredit.CLIENT;
       _initializePagseguro(handler: handler);
@@ -50,7 +54,24 @@ class PagseguroController {
   void _initializePagseguro({required PagseguroHandler handler}) async {
     _pagseguroTech.payment.setHandler(handler);
     await Future.delayed(const Duration(milliseconds: 500));
-    _pagseguroTech.payment.isAuthenticated();
+    _guard(_pagseguroTech.payment.isAuthenticated());
+  }
+
+  /// Acompanha uma chamada ao nativo. `LICENCE_ERROR` já chega ao handler como onError; qualquer
+  /// outro erro (ex.: PlatformException "ERROR") encerra a tela com a resposta de erro em vez de
+  /// deixar o Future falhar sem tratamento e a tela presa em "Aguarde...".
+  void _guard(Future<dynamic> call) {
+    unawaited(call.then<void>((_) {}, onError: (Object error) {
+      if (error is PlatformException && error.code == Payment.licenceErrorCode) {
+        return;
+      }
+      final message = error is PlatformException ? (error.message ?? error.code) : error.toString();
+      log('***Erro_pagseguro: $message');
+      final onPopResult = _onPopResult;
+      if (onPopResult != null) {
+        onPopResult(_generateErrorResponse(errorMessage: message));
+      }
+    }));
   }
 
   void onMessageMonitor(String message) {
@@ -80,6 +101,7 @@ class PagseguroController {
     required String message,
     required Function(PagseguroResponseModel?) onPopResult,
   }) async {
+    _onPopResult = onPopResult;
     switch (method) {
       case 'onAuthProgress':
         // _onAuthProgress(message);
@@ -99,7 +121,7 @@ class PagseguroController {
 
   void onAbortCurrentTransaction() {
     if (_isAbortTransaction) return;
-    _pagseguroTech.payment.abortTransaction();
+    _guard(_pagseguroTech.payment.abortTransaction());
     _isAbortTransaction = true;
   }
 
@@ -114,7 +136,7 @@ class PagseguroController {
         _callPayment();
         return;
       }
-      _pagseguroTech.payment.activePinpad(_options?.activationCode ?? '');
+      _guard(_pagseguroTech.payment.activePinpad(_options?.activationCode ?? ''));
     }
   }
 
@@ -130,7 +152,14 @@ class PagseguroController {
     String message, {
     required Function(PagseguroResponseModel?) onPopResult,
   }) {
-    final transactionDecoded = jsonDecode(message);
+    final dynamic transactionDecoded;
+    try {
+      transactionDecoded = jsonDecode(message);
+    } on FormatException catch (e) {
+      log('***onFinishedResponse inválido: $e');
+      return;
+    }
+    if (transactionDecoded is! Map) return;
     final method = transactionDecoded['method'] ?? '';
 
     if (method == 'activate') {
@@ -150,39 +179,31 @@ class PagseguroController {
   }
 
   void _callPayment() {
-    final saleValue = _getSaleValueInt(_amount);
+    final saleValue = _amountInCents;
+    final printReceipt = _options?.isPrinterEstablishment == true;
     switch (_paymentType) {
       case PagseguroPaymentType.credit:
-        _pagseguroTech.payment.creditPayment(saleValue, printReceipt: _options?.isPrinterEstablishment == true);
+        _guard(_pagseguroTech.payment.creditPayment(saleValue, printReceipt: printReceipt));
         break;
       case PagseguroPaymentType.creditParc:
-        _pagseguroTech.payment.creditPaymentParc(
+        _guard(_pagseguroTech.payment.creditPaymentParc(
           saleValue,
           _parcels,
-          printReceipt: _options?.isPrinterEstablishment == true,
+          printReceipt: printReceipt,
           type: _creditType,
-        );
+        ));
         break;
       case PagseguroPaymentType.debit:
-        _pagseguroTech.payment.debitPayment(saleValue, printReceipt: _options?.isPrinterEstablishment == true);
+        _guard(_pagseguroTech.payment.debitPayment(saleValue, printReceipt: printReceipt));
         break;
       case PagseguroPaymentType.voucher:
-        _pagseguroTech.payment.voucherPayment(saleValue, printReceipt: _options?.isPrinterEstablishment == true);
+        _guard(_pagseguroTech.payment.voucherPayment(saleValue, printReceipt: printReceipt));
         break;
       case PagseguroPaymentType.pix:
-        _pagseguroTech.payment.pixPayment(saleValue, printReceipt: _options?.isPrinterEstablishment == true);
-
+        _guard(_pagseguroTech.payment.pixPayment(saleValue, printReceipt: printReceipt));
         break;
       default:
     }
-  }
-
-  int _getSaleValueInt(double value) {
-    int saleValue = 0;
-    final valueFixed = (value * 100).toStringAsFixed(0);
-    final valueInt = int.parse(valueFixed);
-    saleValue = valueInt;
-    return saleValue;
   }
 
   void printerFromFile(String filePath) {

@@ -1,6 +1,6 @@
 name: pagseguro_payment_tech
 description: Integre o Flutter com maquinas smarts da Pagseguro, utilizando o SDK do Pagseguro. Rápido e fácil.
-version: 3.2.1
+version: 3.3.0
 repository: https://github.com/JY-Labtech/pagseguro_payment_tech
 
 environment:
@@ -18,6 +18,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Somente testes: mock do path_provider no teste do PrintRenderWidget.
+  path_provider_platform_interface: ^2.1.0
+  plugin_platform_interface: ^2.1.0
   flutter_lints: ^1.0.0
 
 flutter:

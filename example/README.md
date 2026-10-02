@@ -10,8 +10,9 @@ Aplicativo demonstrativo que exercita pagamentos, NFC e impressão usando o plug
    ```bash
    flutter run \
      --dart-define=PAGSEGURO_LICENCE_KEY=SUA_LICENCE_KEY \
-     --dart-define=PAGSEGURO_LICENCE_INTERNAL_KEY=SUA_LICENCE_INTERNAL_KEY
+     --dart-define=PAGSEGURO_LICENCE_INTERNAL_KEY=***REMOVIDO***
    ```
+   A licença é adquirida em https://portal.jylabtech.com.br (o plano `debug`, com 2 aparelhos, é concedido como cortesia no cadastro). Se `PAGSEGURO_LICENCE_INTERNAL_KEY` não for informado, o exemplo usa o novo endereço de validação por padrão.
 
 ## Código relevante
 

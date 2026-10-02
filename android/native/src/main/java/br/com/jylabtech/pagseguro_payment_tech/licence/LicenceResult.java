@@ -2,12 +2,31 @@ package br.com.jylabtech.pagseguro_payment_tech.licence;
 
 
 public class LicenceResult {
-    private String method;
+    private String method = "licence";
     private String errorMessage;
-    private int result;
+    // Começa como erro: só vira sucesso quando a licença foi validada de fato.
+    private int result = LicenceConfig.RESULT_ERROR;
     private String message;
 
     private CheckLicenceEntity licenceEntity;
+
+    public static LicenceResult success(CheckLicenceEntity entity) {
+        LicenceResult licenceResult = new LicenceResult();
+        licenceResult.setResult(LicenceConfig.RESULT_SUCCESS);
+        licenceResult.setLicenceEntity(entity);
+        return licenceResult;
+    }
+
+    public static LicenceResult error(String errorMessage) {
+        LicenceResult licenceResult = new LicenceResult();
+        licenceResult.setResult(LicenceConfig.RESULT_ERROR);
+        licenceResult.setErrorMessage(errorMessage);
+        return licenceResult;
+    }
+
+    public boolean isSuccess() {
+        return this.result == LicenceConfig.RESULT_SUCCESS;
+    }
 
     public void setLicenceEntity(CheckLicenceEntity entity) {
         this.licenceEntity = entity;

@@ -2,6 +2,13 @@ package br.com.jylabtech.pagseguro_payment_tech.core;
 
 import android.content.Context;
 
+import java.util.List;
+import java.util.Map;
+
+import br.com.jylabtech.pagseguro_payment_tech.licence.CheckLicenceTech;
+import br.com.jylabtech.pagseguro_payment_tech.licence.LicenceConfig;
+import br.com.jylabtech.pagseguro_payment_tech.licence.LicenceResult;
+import br.com.jylabtech.pagseguro_payment_tech.payments.PaymentsFragment;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagCustomPrinterLayout;
 import br.com.jylabtech.pagseguro_payment_tech.nfc.NFCPresenter;
@@ -10,7 +17,11 @@ import br.com.jylabtech.pagseguro_payment_tech.printer.PrinterPresenter;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 
-public class PagSeguroPayment {
+/**
+ * Fachada nativa do plugin: guarda as chaves de licença, cria os presenters sobre um único
+ * {@link PlugPag} e executa as operações liberadas pelo gate de licença.
+ */
+public class PagSeguroPayment implements ChannelRequestHandler.Facade {
   private final PlugPag plugPag;
   private final MethodChannel mChannel;
   private final Context context;
@@ -19,276 +30,278 @@ public class PagSeguroPayment {
   private PrinterPresenter printerPresenter;
   private NFCPresenter nfcPresenter;
 
-  private String licenceKey;
-  private String licenceInternalKey;
+  private volatile String licenceKey;
+  private volatile String licenceInternalKey;
+  private final CheckLicenceTech licenceTech;
+  private final PaymentsFragment licenceFragment;
 
-  private static final String PAYMENT_DEBIT = "paymentDebit";
-  private static final String PAYMENT_CREDIT = "paymentCredit";
-  private static final String PAYMENT_CREDIT_PARC = "paymentCreditParc";
-  private static final String PAYMENT_VOUCHER = "paymentVoucher";
-  private static final String PAYMENT_ABORT = "paymentAbort";
-  private static final String LAST_TRANSACTION = "paymentLastTransaction";
-  private static final String REFUND = "paymentRefund";
-  private static final String PAYMENT_PIX = "paymentPix";
-  private static final String START_PAYMENT = "startPayment";
-
-  private static final String ACTIVE_PINPAD = "paymentActivePinpad";
-  private static final String PINPAD_AUTHENTICATED = "paymentIsAuthenticated";
-  private static final String REBOOT_DEVICE = "paymentReboot";
-  private static final String BEEP_PAYMENT = "paymentBeep";
-  private static final String GET_SERIAL_NUMBER = "paymentGetSerialNumber";
-
-  private static final String WRITE_NFC = "paymentWriteNfc";
-  private static final String READ_NFC = "paymentReadNfc";
-  private static final String FORMAT_NFC = "paymentFormatNfc";
-  private static final String REWRITE_NFC = "paymentReWriteNfc";
-  private static final String REFUND_NFC = "paymentReFundNfc";
-  private static final String DEBIT_NFC = "paymentDebitNfc";
-
-  private static final String PRINTER_FILE = "paymentPrinterFile";
-  private static final String PRINTER = "paymentPrinter";
-  private static final String PRINTER_BASIC = "paymentPrinterBasic";
-  private static final String PRINTER_FILE_PATH = "paymentPrinterFilePath";
-
-  private static final String GET_USER_DATA = "paymentGetUserData";
-  private static final String STYLE_DIALOG = "paymentStyleDialog";
-  private static final String CALCULATE_INSTALLMENTS = "paymentCalculateInstallments";
+  private static final int DEFAULT_MAX_TIME_SHOW_POPUP = 30;
+  private int maxTimeShowPopup = DEFAULT_MAX_TIME_SHOW_POPUP;
+  /** Background para as chamadas bloqueantes ao PlugPagService (número de série, impressão...). */
+  private final AndroidAsyncExecutor sdkExecutor;
+  /** Último layout aplicado ao dialog de impressão da via do cliente. */
+  private PlugPagCustomPrinterLayout printerLayout;
 
   public PagSeguroPayment(Context context, MethodChannel channel) {
     this.context = context;
     PlugPag instancePlugPag = new PlugPag(context);
-    PlugPagCustomPrinterLayout customDialog = new PlugPagCustomPrinterLayout();
-    customDialog.setMaxTimeShowPopup(30);
-    instancePlugPag.setPlugPagCustomPrinterLayout(customDialog);
     this.plugPag = instancePlugPag;
     this.mChannel = channel;
+    this.licenceTech = new CheckLicenceTech(context);
+    this.licenceFragment = new PaymentsFragment(channel);
+    this.sdkExecutor = new AndroidAsyncExecutor();
+    applyPrintDialogLayout();
   }
 
-  public void updateLicenceKeys(String licenceKey, String licenceInternalKey) throws Exception {
-    if (licenceKey == null || licenceKey.trim().isEmpty()) {
-      throw new Exception("licenceKey é obrigatório.");
+  @Override
+  public void setMaxTimeShowPopup(int maxTimeShowPopup) {
+    this.maxTimeShowPopup = maxTimeShowPopup > 0 ? maxTimeShowPopup : DEFAULT_MAX_TIME_SHOW_POPUP;
+    applyPrintDialogLayout();
+  }
+
+  /**
+   * Reaplica o layout do dialog de impressão com o tempo atual, preservando as cores/título
+   * definidos em setDialogstyle (antes, cada initPayment/setPrintDialogMaxTime criava um layout
+   * novo e descartava o estilo).
+   */
+  private void applyPrintDialogLayout() {
+    PlugPagCustomPrinterLayout customDialog = this.printerLayout;
+    if (customDialog == null) {
+      customDialog = new PlugPagCustomPrinterLayout();
+      this.printerLayout = customDialog;
     }
-    if (licenceInternalKey == null || licenceInternalKey.trim().isEmpty()) {
-      throw new Exception("licenceInternalKey é obrigatório.");
-    }
-    this.licenceKey = licenceKey.trim();
-    this.licenceInternalKey = licenceInternalKey.trim();
+    customDialog.setMaxTimeShowPopup(this.maxTimeShowPopup);
+    // Os presenters usam o mesmo PlugPag: não é preciso recriá-los para o layout valer.
+    this.plugPag.setPlugPagCustomPrinterLayout(customDialog);
+  }
+
+  /**
+   * Guarda as chaves de licença. O licenceInternalKey é opcional: valores vazios ou fora do
+   * servidor oficial são substituídos pela URL do core em {@link CheckLicenceTech}.
+   * Chave ausente não lança: a validação seguinte devolve LICENCE_ERROR.
+   */
+  @Override
+  public void updateLicenceKeys(String licenceKey, String licenceInternalKey) {
+    this.licenceKey = licenceKey == null ? null : licenceKey.trim();
+    this.licenceInternalKey = (licenceInternalKey == null || licenceInternalKey.trim().isEmpty())
+        ? LicenceConfig.LICENCE_CHECK_URL
+        : licenceInternalKey.trim();
     initializePresenters();
   }
 
-  public boolean ensureLicenceValid() throws Exception {
-    initializePresenters();
-    if (licenceKey == null || licenceKey.isEmpty()) {
-      throw new Exception("licenceKey é obrigatório.");
+  /**
+   * Valida a licença (cache válido ou servidor). Pode fazer rede: chamar FORA da main thread.
+   * Não toca no MethodChannel.
+   */
+  @Override
+  public LicenceResult checkLicence() {
+    return licenceTech.validateLicence(licenceKey, licenceInternalKey);
+  }
+
+  /** Avisa o Flutter que a licença está sendo verificada (main thread). */
+  @Override
+  public void notifyLicenceChecking() {
+    licenceFragment.onMessage("Verificando licença");
+  }
+
+  /**
+   * Repassa o resultado da validação ao handler do Flutter (main thread), mantendo os mesmos
+   * eventos das versões anteriores (onMessage / onError / onFinishedResponse com method "licence").
+   */
+  @Override
+  public void notifyLicenceResult(LicenceResult licenceResult) {
+    ActionResult result = new ActionResult();
+    result.setMethod("licence");
+    if (licenceResult != null && licenceResult.isSuccess()) {
+      licenceFragment.onMessage("Licença ativada");
+      result.setResult(0);
+      result.setMessage("Licença ativada com sucesso");
+    } else {
+      String errorMessage = licenceErrorMessage(licenceResult);
+      licenceFragment.onMessage(errorMessage);
+      result.setResult(LicenceConfig.RESULT_ERROR);
+      result.setErrorMessage(errorMessage);
+      licenceFragment.onError(errorMessage);
     }
-    if (licenceInternalKey == null || licenceInternalKey.isEmpty()) {
-      throw new Exception("licenceInternalKey é obrigatório.");
-    }
-    boolean resultLicence = this.paymentsPresenter.checkValidLicence(licenceKey, licenceInternalKey);
-    if (!resultLicence) {
-      throw new Exception("Sua licença não foi ativada.");
-    }
-    return true;
+    licenceFragment.onFinishedResponse(JsonResults.toJson(result));
+  }
+
+  public static String licenceErrorMessage(LicenceResult licenceResult) {
+    return ChannelRequestHandler.licenceErrorMessage(licenceResult);
   }
 
   private void initializePresenters() {
     if (this.paymentsPresenter == null) {
-      this.paymentsPresenter = new PaymentsPresenter(this.plugPag, this.mChannel, this.context);
+      // Mesma CheckLicenceTech do gate: um único cache/EncryptedSharedPreferences.
+      this.paymentsPresenter = new PaymentsPresenter(this.plugPag, this.mChannel, this.licenceTech);
     }
 
     if (this.printerPresenter == null) {
-      this.printerPresenter = new PrinterPresenter(this.plugPag, this.mChannel);
+      this.printerPresenter = new PrinterPresenter(this.plugPag, this.mChannel, this.context);
     }
 
     if (this.nfcPresenter == null) {
       this.nfcPresenter = new NFCPresenter(this.plugPag, this.mChannel);
     } else {
+      // Comportamento mantido das versões anteriores: cada nova chamada cancela a
+      // assinatura NFC anterior (o resultado de uma leitura pendente deixa de ser entregue).
       this.nfcPresenter.dispose();
     }
   }
 
-  private void restartPresenters() {
-    this.paymentsPresenter = new PaymentsPresenter(this.plugPag, this.mChannel, this.context);
-    this.printerPresenter = new PrinterPresenter(this.plugPag, this.mChannel);
-    this.nfcPresenter = new NFCPresenter(this.plugPag, this.mChannel);
-    this.nfcPresenter.dispose();
-  }
-
+  /**
+   * Executa a operação. Só pode ser chamado DEPOIS de {@link #checkLicence()} devolver sucesso
+   * (o PagseguroPaymentTechNativePlugin garante isso para todo método de negócio).
+   * O result é completado exatamente uma vez por {@link PaymentMethodRouter}; o resultado da
+   * transação/impressão/NFC continua chegando pelos eventos do handler.
+   */
+  @Override
   public void handleMethodCall(MethodCall call, MethodChannel.Result result) throws Exception {
     initializePresenters();
-    ensureLicenceValid();
+    PaymentMethodRouter.dispatch(call, result, operations, sdkExecutor);
+  }
 
-    if (call.method.equals(STYLE_DIALOG)) {
-      setDialogStyle(call);
-      result.success(true);
-      return;
+  private final PaymentMethodRouter.Operations operations = new PaymentMethodRouter.Operations() {
+    @Override
+    public void setDialogStyle(MethodCall call) {
+      PagSeguroPayment.this.setDialogStyle(call);
     }
 
-    if (call.method.equals(PRINTER_FILE)) {
-      String filePath = call.argument("path");
-      printerPresenter.printerFromFile(filePath);
+    @Override
+    public void setMaxTimeShowPopup(int maxTimeShowPopup) {
+      PagSeguroPayment.this.setMaxTimeShowPopup(maxTimeShowPopup);
     }
 
-    if (call.method.equals(PRINTER)) {
-      String filePath = call.argument("path");
-      printerPresenter.printFile(filePath);
+    @Override
+    public void printerFromFile(String path) {
+      printerPresenter.printerFromFile(path);
     }
 
-    if (call.method.equals(PRINTER_BASIC)) {
-      String filePath = call.argument("path");
+    @Override
+    public void printFile(String fileName) {
+      printerPresenter.printFile(fileName);
+    }
+
+    @Override
+    public void printer(String filePath) {
       printerPresenter.printer(filePath);
     }
 
-    if (call.method.equals(PRINTER_FILE_PATH)) {
-      String filePath = call.argument("path");
+    @Override
+    public void printerByFilePath(String filePath) {
       printerPresenter.printerByFilePath(filePath);
     }
 
-    if (call.method.equals(REBOOT_DEVICE)) {
-      this.paymentsPresenter.rebootDevice();
-      result.success(true);
-      return;
+    @Override
+    public void rebootDevice() throws Exception {
+      paymentsPresenter.rebootDevice();
     }
 
-    if (call.method.equals(BEEP_PAYMENT)) {
-      this.paymentsPresenter.beep();
-      result.success(true);
-      return;
+    @Override
+    public void beep() throws Exception {
+      paymentsPresenter.beep();
     }
 
-    if (call.method.equals(GET_SERIAL_NUMBER)) {
-      String serialNumber = this.paymentsPresenter.getSerialNumber();
-      result.success(serialNumber);
-      return;
+    @Override
+    public String getSerialNumber() throws Exception {
+      return paymentsPresenter.getSerialNumber();
     }
 
-    if (call.method.equals(GET_USER_DATA)) {
-      this.paymentsPresenter.getUserData();
-      result.success(true);
-      return;
+    @Override
+    public void getUserData() throws Exception {
+      paymentsPresenter.getUserData();
     }
 
-    if (call.method.equals(CALCULATE_INSTALLMENTS)) {
-      try {
-        String saleValue = call.argument("saleValue");
-        int installmentType = call.argument("installmentType");
-        java.util.List<java.util.Map<String, Object>> installments = this.paymentsPresenter.calculateInstallments(saleValue, installmentType);
-        result.success(installments);
-        return;
-      } catch (Exception e) {
-        result.error("ERROR", e.getMessage(), null);
-        return;
-      }
+    @Override
+    public List<Map<String, Object>> calculateInstallments(String saleValue, int installmentType) throws Exception {
+      return paymentsPresenter.calculateInstallments(saleValue, installmentType);
     }
 
-    if (call.method.equals(PAYMENT_DEBIT)) {
-      this.paymentsPresenter.doDebitPayment(
-          (int) call.argument("value"),
-          (String) call.argument("userReference"),
-          (Boolean) call.argument("printReceipt"),
-          (Boolean) call.argument("partialPay"),
-          (Boolean) call.argument("isCarne"));
-    } else if (call.method.equals(ACTIVE_PINPAD)) {
-      this.paymentsPresenter.activate(call.argument("code"));
-      result.success(true);
-      return;
-    } else if (call.method.equals(PINPAD_AUTHENTICATED)) {
-      this.paymentsPresenter.isAuthenticate();
-      result.success(true);
-      return;
-    } else if (call.method.equals(PAYMENT_PIX)) {
-      this.paymentsPresenter.doPixPayment(
-          (int) call.argument("value"),
-          (String) call.argument("userReference"),
-          (Boolean) call.argument("printReceipt"),
-          (Boolean) call.argument("partialPay"),
-          (Boolean) call.argument("isCarne"));
-      result.success(true);
-      return;
-    } else if (call.method.equals(PAYMENT_CREDIT)) {
-      this.paymentsPresenter.creditPayment(
-          (int) call.argument("value"),
-          (String) call.argument("userReference"),
-          (Boolean) call.argument("printReceipt"),
-          (Boolean) call.argument("partialPay"),
-          (Boolean) call.argument("isCarne"));
-      result.success(true);
-      return;
-    } else if (call.method.equals(PAYMENT_CREDIT_PARC)) {
-      this.paymentsPresenter.creditPaymentParc(
-          (int) call.argument("value"),
-          (int) call.argument("type"),
-          (int) call.argument("parc"),
-          (String) call.argument("userReference"),
-          (Boolean) call.argument("printReceipt"),
-          (Boolean) call.argument("partialPay"),
-          (Boolean) call.argument("isCarne"));
-      result.success(true);
-      return;
-    } else if (call.method.equals(PAYMENT_VOUCHER)) {
-      this.paymentsPresenter.doVoucherPayment(
-          (int) call.argument("value"),
-          (String) call.argument("userReference"),
-          (Boolean) call.argument("printReceipt"),
-          (Boolean) call.argument("partialPay"),
-          (Boolean) call.argument("isCarne"));
-      result.success(true);
-      return;
-    } else if (call.method.equals(START_PAYMENT)) {
-      this.paymentsPresenter.startPayment(
-          (int) call.argument("type"),
-          (int) call.argument("amount"),
-          (int) call.argument("installmentType"),
-          (int) call.argument("installments"),
-          (String) call.argument("userReference"),
-          (Boolean) call.argument("printReceipt"),
-          (Boolean) call.argument("partialPay"),
-          (Boolean) call.argument("isCarne"));
-      result.success(true);
-      return;
-    } else if (call.method.equals(PAYMENT_ABORT)) {
-      this.paymentsPresenter.abortTransaction();
-      result.success(true);
-      return;
-    } else if (call.method.equals(LAST_TRANSACTION)) {
-      this.paymentsPresenter.getLastTransaction();
-      result.success(true);
-      return;
-    } else if (call.method.equals(REFUND)) {
-      this.paymentsPresenter.doRefund(
-          call.argument("transactionCode"),
-          call.argument("transactionId"));
-      result.success(true);
-      return;
-    } else if (call.method.equals(READ_NFC)) {
-      this.nfcPresenter.readNFCCard(call.argument("idEvento"));
-    } else if (call.method.equals(WRITE_NFC)) {
-      this.nfcPresenter.writeNFCCard(
-          call.argument("valor"),
-          call.argument("nome"),
-          call.argument("cpf"),
-          call.argument("numeroTag"),
-          call.argument("celular"),
-          call.argument("aberto"),
-          call.argument("idEvento"));
-    } else if (call.method.equals(REWRITE_NFC)) {
-      this.nfcPresenter.reWriteNFCCard(
-          call.argument("valor"),
-          call.argument("idEvento"));
-    } else if (call.method.equals(REFUND_NFC)) {
-      this.nfcPresenter.reFundNFCCard(
-          call.argument("valor"),
-          call.argument("idEvento"));
-    } else if (call.method.equals(FORMAT_NFC)) {
-      this.nfcPresenter.formatNFCCard();
-    } else if (call.method.equals(DEBIT_NFC)) {
-      this.nfcPresenter.debitNFCCard(
-          call.argument("idEvento"),
-          call.argument("valor"));
-    } else {
-      result.notImplemented();
+    @Override
+    public void debitPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
+      paymentsPresenter.doDebitPayment(value, userReference, printReceipt, partialPay, isCarne);
     }
-  }
+
+    @Override
+    public void activatePinpad(String code) throws Exception {
+      paymentsPresenter.activate(code);
+    }
+
+    @Override
+    public void isAuthenticated() throws Exception {
+      paymentsPresenter.isAuthenticate();
+    }
+
+    @Override
+    public void pixPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
+      paymentsPresenter.doPixPayment(value, userReference, printReceipt, partialPay, isCarne);
+    }
+
+    @Override
+    public void creditPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
+      paymentsPresenter.creditPayment(value, userReference, printReceipt, partialPay, isCarne);
+    }
+
+    @Override
+    public void creditPaymentParc(int value, int type, int parc, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
+      paymentsPresenter.creditPaymentParc(value, type, parc, userReference, printReceipt, partialPay, isCarne);
+    }
+
+    @Override
+    public void voucherPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
+      paymentsPresenter.doVoucherPayment(value, userReference, printReceipt, partialPay, isCarne);
+    }
+
+    @Override
+    public void startPayment(int type, int amount, int installmentType, int installments, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
+      paymentsPresenter.startPayment(type, amount, installmentType, installments, userReference, printReceipt, partialPay, isCarne);
+    }
+
+    @Override
+    public void abortTransaction() throws Exception {
+      paymentsPresenter.abortTransaction();
+    }
+
+    @Override
+    public void lastTransaction() throws Exception {
+      paymentsPresenter.getLastTransaction();
+    }
+
+    @Override
+    public void refund(String transactionCode, String transactionId) throws Exception {
+      paymentsPresenter.doRefund(transactionCode, transactionId);
+    }
+
+    @Override
+    public void readNfc(String idEvento) {
+      nfcPresenter.readNFCCard(idEvento);
+    }
+
+    @Override
+    public void writeNfc(String valor, String nome, String cpf, String numeroTag, String celular, String aberto, String idEvento) {
+      nfcPresenter.writeNFCCard(valor, nome, cpf, numeroTag, celular, aberto, idEvento);
+    }
+
+    @Override
+    public void reWriteNfc(String valor, String idEvento) {
+      nfcPresenter.reWriteNFCCard(valor, idEvento);
+    }
+
+    @Override
+    public void refundNfc(String valor, String idEvento) {
+      nfcPresenter.reFundNFCCard(valor, idEvento);
+    }
+
+    @Override
+    public void formatNfc() {
+      nfcPresenter.formatNFCCard();
+    }
+
+    @Override
+    public void debitNfc(String idEvento, String valor) {
+      nfcPresenter.debitNFCCard(idEvento, valor);
+    }
+  };
 
   private void setDialogStyle(MethodCall call) {
     String title = call.argument("title");
@@ -299,10 +312,12 @@ public class PagSeguroPayment {
     String sendSMSTextColor = call.argument("sendSMSTextColor");
     String titleColor = call.argument("titleColor");
     String windowBackgroundColor = call.argument("windowBackgroundColor");
-    int maxTimeShowPopUp = call.argument("maxTimeShowPopUp");
+    Integer maxTimeShowPopUpArg = call.argument("maxTimeShowPopUp");
+    int maxTimeShowPopUp = maxTimeShowPopUpArg != null ? maxTimeShowPopUpArg : DEFAULT_MAX_TIME_SHOW_POPUP;
+    this.maxTimeShowPopup = maxTimeShowPopUp > 0 ? maxTimeShowPopUp : DEFAULT_MAX_TIME_SHOW_POPUP;
 
     PlugPagCustomPrinterLayout customDialog = new PlugPagCustomPrinterLayout();
-    customDialog.setMaxTimeShowPopup(maxTimeShowPopUp);
+    customDialog.setMaxTimeShowPopup(this.maxTimeShowPopup);
     customDialog.setButtonBackgroundColor(buttonBackgroundColor);
     customDialog.setTitle(title);
     customDialog.setButtonBackgroundColorDisabled(buttonBackgroundColorDisabled);
@@ -312,13 +327,21 @@ public class PagSeguroPayment {
     customDialog.setTitleColor(titleColor);
     customDialog.setWindowBackgroundColor(windowBackgroundColor);
 
+    this.printerLayout = customDialog;
     this.plugPag.setPlugPagCustomPrinterLayout(customDialog);
-    restartPresenters();
   }
 
+  /** Libera assinaturas RxJava de todos os presenters e a thread de background do SDK. */
   public void dispose() {
     if (this.paymentsPresenter != null) {
       this.paymentsPresenter.dispose();
     }
+    if (this.printerPresenter != null) {
+      this.printerPresenter.dispose();
+    }
+    if (this.nfcPresenter != null) {
+      this.nfcPresenter.dispose();
+    }
+    this.sdkExecutor.shutdown();
   }
 }

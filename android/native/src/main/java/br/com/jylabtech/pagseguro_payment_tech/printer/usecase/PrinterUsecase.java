@@ -1,7 +1,9 @@
 package br.com.jylabtech.pagseguro_payment_tech.printer.usecase;
 
 
-import android.os.Environment;
+import android.content.Context;
+
+import br.com.jylabtech.pagseguro_payment_tech.printer.PrintFileResolver;
 import android.util.Log;
 
 import java.io.File;
@@ -27,11 +29,17 @@ public class PrinterUsecase {
 
     private PlugPag mPlugpag;
     private PaymentsFragment mFragment;
+    private final Context context;
 
     @Inject
     public PrinterUsecase(PlugPag plugPag, MethodChannel channel) {
+        this(plugPag, channel, null);
+    }
+
+    public PrinterUsecase(PlugPag plugPag, MethodChannel channel, Context context) {
         this.mPlugpag = plugPag;
         this.mFragment = new PaymentsFragment(channel);
+        this.context = context;
     }
 
     public void printerFromFile(String path) {
@@ -77,15 +85,13 @@ public class PrinterUsecase {
         }
     }
 
+    /** Imprime um arquivo do armazenamento do app (veja {@link PrintFileResolver}). */
     public Observable<ActionResult> printFile(String fileName) {
-        String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Download/" + fileName;
-
-        File file = new File(path);
-
-
         return Observable.create((ObservableEmitter<ActionResult> emitter) -> {
             ActionResult actionResult = new ActionResult();
-            if (file.exists()) {
+            File file = PrintFileResolver.resolve(fileName, PrintFileResolver.appDirectories(context));
+            if (file != null) {
+                String path = file.getAbsolutePath();
                 PlugPagPrintResult result = mPlugpag.printFromFile(
                         new PlugPagPrinterData(
                                 path,

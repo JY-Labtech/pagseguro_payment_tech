@@ -11,7 +11,11 @@ class PagseguroOptions {
 }
 
 class PagseguroPageParams {
+  /// Valor em reais (ex.: `25.90`). Prefira [amountInCents] para evitar arredondamento de double.
   final double amount;
+
+  /// Valor em centavos (ex.: `2590`). Quando informado, tem prioridade sobre [amount].
+  final int? amountInCents;
   final int? parcels;
   final PaymentTypeCredit? creditType;
   final PagseguroPaymentType type;
@@ -20,12 +24,16 @@ class PagseguroPageParams {
 
   PagseguroPageParams({
     required this.amount,
+    this.amountInCents,
     this.parcels,
     this.creditType,
     required this.type,
     required this.options,
     this.style,
   });
+
+  /// Valor enviado ao SDK, em centavos: [amountInCents] ou [amount] * 100 arredondado.
+  int get amountInCentsOrRounded => amountInCents ?? (amount * 100).round();
 }
 
 class PagseguroPage extends StatefulWidget {
@@ -103,7 +111,9 @@ class _PagseguroPageState extends State<PagseguroPage> {
     final size = MediaQuery.sizeOf(context);
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (_, __) {},
+      onPopInvoked: (
+        _,
+      ) {},
       child: Scaffold(
         backgroundColor: _style.backgroundColor,
         body: SizedBox(
@@ -162,7 +172,7 @@ class _PagseguroPageState extends State<PagseguroPage> {
                       _controller.onAbortCurrentTransaction();
                     },
                     child: Padding(
-                      padding: const EdgeInsetsGeometry.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Text('Cancelar Pagamento', style: TextStyle(color: _style.buttonTextColor)),
                     ),
                     style: ElevatedButton.styleFrom(

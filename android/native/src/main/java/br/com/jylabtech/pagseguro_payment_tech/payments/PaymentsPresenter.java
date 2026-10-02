@@ -1,41 +1,61 @@
 package br.com.jylabtech.pagseguro_payment_tech.payments;
-import android.content.Context;
-import android.util.Log;
 
-import br.com.jylabtech.pagseguro_payment_tech.core.BaseResult;
-import br.com.jylabtech.pagseguro_payment_tech.core.UserDataResult;
-import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
-import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagEventData;
-import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagInstallment;
-import java.util.ArrayList;
-import java.util.HashMap;
+import android.content.Context;
+
 import java.util.List;
 import java.util.Map;
+
 import br.com.jylabtech.pagseguro_payment_tech.core.ActionResult;
-import com.google.gson.Gson;
+import br.com.jylabtech.pagseguro_payment_tech.core.BaseResult;
+import br.com.jylabtech.pagseguro_payment_tech.core.JsonResults;
+import br.com.jylabtech.pagseguro_payment_tech.core.ResultMappers;
+import br.com.jylabtech.pagseguro_payment_tech.core.UserDataResult;
+import br.com.jylabtech.pagseguro_payment_tech.licence.CheckLicenceTech;
+import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
+import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagEventData;
 import io.flutter.plugin.common.MethodChannel;
 import io.reactivex.Observable;
-import io.reactivex.ObservableSource;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
-import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
-import javax.inject.Inject;
+
+/**
+ * Orquestra os casos de uso de pagamento e traduz o resultado em eventos para o Dart
+ * (onMessage, onError, onFinishedResponse, writeToFile...).
+ */
 public class PaymentsPresenter {
-  private PaymentsUseCase mUseCase;
-  private PaymentsFragment mFragment;
+  /** Código de erro usado nos JSON de onFinishedResponse quando a operação falha. */
+  static final int RESULT_ERROR = 999999;
+
+  private final PaymentsUseCase mUseCase;
+  private final PaymentsFragment mFragment;
+  /** Transação/ativação/status/última transação em andamento. */
   private Disposable mSubscribe;
-  private Boolean hasAborted = false;
+  /** Abort tem assinatura própria para não sobrescrever (e vazar) a da transação em andamento. */
+  private Disposable mAbortSubscribe;
   private int countPassword = 0;
-  @Inject
-  public PaymentsPresenter(PlugPag plugPag, MethodChannel channel, Context context) {
-    mFragment = new PaymentsFragment(channel);
-    mUseCase = new PaymentsUseCase(plugPag, context, channel);
+
+  public PaymentsPresenter(PaymentsUseCase useCase, PaymentsFragment fragment) {
+    this.mUseCase = useCase;
+    this.mFragment = fragment;
   }
 
-  public void rebootDevice() {mUseCase.rebootDevice();}
+  public PaymentsPresenter(PlugPag plugPag, MethodChannel channel, CheckLicenceTech licenceTech) {
+    this(new PaymentsUseCase(plugPag, licenceTech), new PaymentsFragment(channel));
+  }
 
-  public void beep() {mUseCase.beep();}
+  /** Construtor legado: cria a própria validação de licença. */
+  public PaymentsPresenter(PlugPag plugPag, MethodChannel channel, Context context) {
+    this(new PaymentsUseCase(plugPag, context, channel), new PaymentsFragment(channel));
+  }
+
+  public void rebootDevice() throws Exception {
+    mUseCase.rebootDevice();
+  }
+
+  public void beep() throws Exception {
+    mUseCase.beep();
+  }
 
   public void creditPaymentParc(int value, int type, int parc, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
     doAction(mUseCase.doCreditPaymentParc(value, type, parc, userReference, printReceipt, partialPay, isCarne), value);
@@ -63,70 +83,82 @@ public class PaymentsPresenter {
 
   public void startPayment(int type, int amount, int installmentType, int installments, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
     doAction(mUseCase.doStartPayment(type, amount, installmentType, installments, userReference, printReceipt, partialPay, isCarne), amount);
-  }  
-
-  private void doAction(Observable<ActionResult> action, int value) throws Exception {
-      ActionResult actionResult = new ActionResult();
-      actionResult.setMethod("transaction");
-    mSubscribe =
-      mUseCase
-        .isAuthenticated()
-        .filter(aBoolean -> {
-          if (!aBoolean) {
-            mFragment.onActivationDialog();
-            mSubscribe.dispose();
-          }
-          return aBoolean;
-        })
-        .flatMap(
-          (Function<Boolean, ObservableSource<ActionResult>>) aBoolean -> action
-        )
-        .subscribeOn(Schedulers.io())
-        .observeOn(AndroidSchedulers.mainThread())
-        .doOnComplete(() -> mFragment.onTransactionSuccess())
-        .doOnDispose(() -> mFragment.disposeDialog())
-        .subscribe(
-          (ActionResult result) -> {
-            writeToFile(result);
-            if (
-              result.getEventCode() ==
-              PlugPagEventData.EVENT_CODE_NO_PASSWORD ||
-              result.getEventCode() ==
-              PlugPagEventData.EVENT_CODE_DIGIT_PASSWORD
-            ) {
-              mFragment.onMessage(
-                checkMessagePassword(result.getEventCode(), value)
-              );
-            } else {
-              mFragment.onMessage(checkMessage(result.getMessage()));
-            }
-            result.setMethod("transaction");
-            checkAndSendResponse(result); //Verificar o que ele fazia antes para enviar o onFinishedResponse
-          },
-          throwable -> {
-            mFragment.onMessage(throwable.getMessage());
-            mFragment.onError(throwable.getMessage());
-            actionResult.setErrorMessage(throwable.getMessage());
-            actionResult.setResult(999999);
-            sendResponse(actionResult);
-            mFragment.disposeDialog();
-          }
-        );
   }
 
+  /**
+   * Executa a transação se o terminal estiver autenticado.
+   * Terminal não ativado: envia activeDialog + disposeDialog e encerra SEM onTransactionSuccess.
+   * (Antes o activeDialog era enviado da thread io, o que o Flutter rejeita, e o mSubscribe podia
+   * ainda ser null nesse momento.)
+   */
+  private void doAction(Observable<ActionResult> action, int value) throws Exception {
+    final ActionResult actionResult = new ActionResult();
+    actionResult.setMethod("transaction");
+    final boolean[] notAuthenticated = {false};
+    countPassword = 0;
+    mSubscribe =
+        mUseCase
+            .isAuthenticated()
+            .flatMap(authenticated -> {
+              if (!authenticated) {
+                notAuthenticated[0] = true;
+                return Observable.<ActionResult>empty();
+              }
+              return action;
+            })
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .doOnDispose(() -> mFragment.disposeDialog())
+            .subscribe(
+                (ActionResult result) -> {
+                  writeToFile(result);
+                  if (result.getEventCode() == PlugPagEventData.EVENT_CODE_NO_PASSWORD
+                      || result.getEventCode() == PlugPagEventData.EVENT_CODE_DIGIT_PASSWORD) {
+                    mFragment.onMessage(checkMessagePassword(result.getEventCode(), value));
+                  } else {
+                    mFragment.onMessage(checkMessage(result.getMessage()));
+                  }
+                  result.setMethod("transaction");
+                  checkAndSendResponse(result);
+                },
+                throwable -> {
+                  String message = errorMessage(throwable);
+                  mFragment.onMessage(message);
+                  mFragment.onError(message);
+                  actionResult.setErrorMessage(message);
+                  actionResult.setResult(RESULT_ERROR);
+                  sendResponse(actionResult);
+                  mFragment.disposeDialog();
+                },
+                () -> {
+                  if (notAuthenticated[0]) {
+                    mFragment.onActivationDialog();
+                    mFragment.disposeDialog();
+                  } else {
+                    mFragment.onTransactionSuccess();
+                  }
+                });
+  }
+
+  static String errorMessage(Throwable throwable) {
+    if (throwable == null) {
+      return "Erro desconhecido";
+    }
+    String message = throwable.getMessage();
+    return message != null ? message : throwable.getClass().getSimpleName();
+  }
 
   private void sendResponse(BaseResult result) {
-      String response = new Gson().toJson(result);
-      mFragment.onFinishedResponse(response);
+    mFragment.onFinishedResponse(JsonResults.toJson(result));
   }
 
-   private void checkAndSendResponse(ActionResult result) {
+  private void checkAndSendResponse(ActionResult result) {
     if (result.getBuildResponse() != 0) {
       sendResponse(result);
     }
   }
 
-  private String checkMessagePassword(int eventCode, int value) {
+  String checkMessagePassword(int eventCode, int value) {
     StringBuilder strPassword = new StringBuilder();
     if (eventCode == PlugPagEventData.EVENT_CODE_DIGIT_PASSWORD) {
       countPassword++;
@@ -137,174 +169,160 @@ public class PaymentsPresenter {
     for (int count = countPassword; count > 0; count--) {
       strPassword.append("*");
     }
-    return String.format(
-      "VALOR: %.2f\nSENHA: %s",
-      (value / 100.0),
-      strPassword.toString()
-    );
+    return String.format("VALOR: %.2f\nSENHA: %s", (value / 100.0), strPassword.toString());
   }
-  private String checkMessage(String message) {
+
+  static String checkMessage(String message) {
     if (message != null && !message.isEmpty() && message.contains("SENHA")) {
       String[] strings = message.split("SENHA");
-      return strings[0].trim();
+      return strings.length > 0 ? strings[0].trim() : "";
     }
     return message;
   }
+
   private void writeToFile(ActionResult result) {
-    if (
-      result.getTransactionCode() != null && result.getTransactionId() != null
-    ) {
-      String response;
-      response = new Gson().toJson(result);
-      mFragment.writeToFile(
-        result.getTransactionCode(),
-        result.getTransactionId(),
-        response
-      );
+    if (result.getTransactionCode() != null && result.getTransactionId() != null) {
+      mFragment.writeToFile(result.getTransactionCode(), result.getTransactionId(), JsonResults.toJson(result));
     }
   }
+
+  /**
+   * Aborta a operação atual. Abort confirmado pelo SDK envia onAbortedSuccessfully (antes o evento
+   * nunca era enviado). Falha do SDK vira onError (antes derrubava o app: subscribe sem onError).
+   */
   public void abortTransaction() throws Exception {
-    mSubscribe =
-      mUseCase
-        .abort()
-        .subscribeOn(Schedulers.io())
-        .observeOn(AndroidSchedulers.mainThread())
-        .subscribe();
+    disposeAbort();
+    mAbortSubscribe =
+        mUseCase
+            .abort()
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                aborted -> {
+                  if (aborted) {
+                    mFragment.onAbortedSuccessfully();
+                  }
+                },
+                throwable -> mFragment.onError(errorMessage(throwable)));
   }
+
   public void activate(String activationCode) throws Exception {
-      ActionResult resultAction = new ActionResult();
-      resultAction.setMethod("activate");
+    ActionResult resultAction = new ActionResult();
+    resultAction.setMethod("activate");
     mFragment.onMessage("Ativando terminal");
 
     mSubscribe =
-      mUseCase
-        .initializeAndActivatePinpad(activationCode)
-        .observeOn(AndroidSchedulers.mainThread())
-        .subscribeOn(Schedulers.io())
-        .doOnSubscribe(disposable -> mFragment.onLoading(true))
-        .doOnComplete(() -> {
-            mFragment.onLoading(false);
-            resultAction.setMessage("Terminal ativado");
-            resultAction.setResult(0);
-            mFragment.onMessage("Terminal ativado");
-            mFragment.onAuthProgress("Terminal ativado");
-            mFragment.disposeDialog();
-            sendResponse(resultAction);
-        })
-        .doOnDispose(() -> mFragment.disposeDialog())
-        .subscribe(
-          actionResult -> {
-              actionResult.setMethod("activate");
-              mFragment.onAuthProgress(actionResult.getMessage());
-          },
-          throwable -> {
+        mUseCase
+            .initializeAndActivatePinpad(activationCode)
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribeOn(Schedulers.io())
+            .doOnSubscribe(disposable -> mFragment.onLoading(true))
+            .doOnComplete(() -> {
               mFragment.onLoading(false);
-              mFragment.onMessage("Error ao ativar terminal");
+              resultAction.setMessage("Terminal ativado");
+              resultAction.setResult(0);
+              mFragment.onMessage("Terminal ativado");
+              mFragment.onAuthProgress("Terminal ativado");
               mFragment.disposeDialog();
-              mFragment.onError(throwable.getMessage());
-              resultAction.setErrorMessage(throwable.getMessage());
-              resultAction.setResult(999999);
               sendResponse(resultAction);
-              Log.d("print", "*** throw: " + throwable.getMessage());
-          }
-        );
+            })
+            .doOnDispose(() -> mFragment.disposeDialog())
+            .subscribe(
+                actionResult -> {
+                  actionResult.setMethod("activate");
+                  mFragment.onAuthProgress(actionResult.getMessage());
+                },
+                throwable -> {
+                  String message = errorMessage(throwable);
+                  mFragment.onLoading(false);
+                  mFragment.onMessage("Error ao ativar terminal");
+                  mFragment.disposeDialog();
+                  mFragment.onError(message);
+                  resultAction.setErrorMessage(message);
+                  resultAction.setResult(RESULT_ERROR);
+                  sendResponse(resultAction);
+                });
   }
+
   public void isAuthenticate() throws Exception {
     ActionResult resultAction = new ActionResult();
     resultAction.setMethod("activate");
-        mFragment.onMessage("Obtendo status do terminal");
-        mSubscribe = mUseCase.isAuthenticated()
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribeOn(Schedulers.io())
-                .doOnSubscribe(disposable -> mFragment.onLoading(true))
-                .doOnComplete(()-> {
-                    mFragment.onLoading(false);
-                    mFragment.disposeDialog();
-                })
-                .doOnDispose(() -> mFragment.disposeDialog())
-                .subscribe(
-                        result -> {
-                            if(result){
-                                resultAction.setMethod("activate");
-                                 resultAction.setMessage("Terminal ativado");
-                                 resultAction.setResult(0);
-                                mFragment.onAuthProgress("Terminal ativado");
-                            }else {
-                                mFragment.onAuthProgress("Terminal não ativado");
-                                resultAction.setMessage("Terminal não ativado");
-                                resultAction.setResult(999999);
-                            }
-                            sendResponse(resultAction);
-                        },
-                        throwable -> {
-                            mFragment.onLoading(false);
-                            mFragment.onMessage("Error ao obter status do terminal");
-                            mFragment.disposeDialog();
-                            mFragment.onError(throwable.getMessage());
-                            resultAction.setErrorMessage(throwable.getMessage());
-                            resultAction.setResult(999999);
-                            sendResponse(resultAction);
-                            Log.d("print", "*** throw: " + throwable.getMessage());
-                        });
-    }
-  public void getLastTransaction() throws Exception {
+    mFragment.onMessage("Obtendo status do terminal");
     mSubscribe =
-      mUseCase
-        .getLastTransaction()
-        .observeOn(AndroidSchedulers.mainThread())
-        .subscribeOn(Schedulers.io())
-        .subscribe(
-          actionResult -> {
-            String response;
-            response = new Gson().toJson(actionResult);
-            mFragment.onTransactionInfo(
-              actionResult.getTransactionCode(),
-              actionResult.getTransactionId(),
-              response
-            );
-          },
-          throwable -> mFragment.onError(throwable.getMessage())
-        );
+        mUseCase
+            .isAuthenticated()
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribeOn(Schedulers.io())
+            .doOnSubscribe(disposable -> mFragment.onLoading(true))
+            .doOnComplete(() -> {
+              mFragment.onLoading(false);
+              mFragment.disposeDialog();
+            })
+            .doOnDispose(() -> mFragment.disposeDialog())
+            .subscribe(
+                result -> {
+                  if (result) {
+                    resultAction.setMessage("Terminal ativado");
+                    resultAction.setResult(0);
+                    mFragment.onAuthProgress("Terminal ativado");
+                  } else {
+                    mFragment.onAuthProgress("Terminal não ativado");
+                    resultAction.setMessage("Terminal não ativado");
+                    resultAction.setResult(RESULT_ERROR);
+                  }
+                  sendResponse(resultAction);
+                },
+                throwable -> {
+                  String message = errorMessage(throwable);
+                  mFragment.onLoading(false);
+                  mFragment.onMessage("Error ao obter status do terminal");
+                  mFragment.disposeDialog();
+                  mFragment.onError(message);
+                  resultAction.setErrorMessage(message);
+                  resultAction.setResult(RESULT_ERROR);
+                  sendResponse(resultAction);
+                });
   }
 
-  public String getSerialNumber() {
+  public void getLastTransaction() throws Exception {
+    mSubscribe =
+        mUseCase
+            .getLastTransaction()
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribeOn(Schedulers.io())
+            .subscribe(
+                actionResult -> mFragment.onTransactionInfo(
+                    actionResult.getTransactionCode(),
+                    actionResult.getTransactionId(),
+                    JsonResults.toJson(actionResult)),
+                throwable -> mFragment.onError(errorMessage(throwable)));
+  }
+
+  public String getSerialNumber() throws Exception {
     return mUseCase.getSerialNumber();
   }
 
-    public boolean checkValidLicence(String licenceKey, String licenceInternalKey) throws Exception {
-      boolean aux = false;
-        boolean result =  this.mUseCase.checkValidLicence(licenceKey, licenceInternalKey);
-        if(result) {
-            aux = true;
-        }
+  /** Envia os dados do estabelecimento em onFinishedResponse (method "userData"). */
+  public void getUserData() throws Exception {
+    UserDataResult result = this.mUseCase.getUserData();
+    sendResponse(result);
+  }
 
-        return aux;
-    }
+  public List<Map<String, Object>> calculateInstallments(String saleValue, int installmentType) throws Exception {
+    return ResultMappers.installmentsToMaps(this.mUseCase.calculateInstallments(saleValue, installmentType));
+  }
 
-    public void getUserData() throws Exception {
-        UserDataResult result = this.mUseCase.getUserData();
-        result.setMethod("userData");
-        sendResponse(result);
+  private void disposeAbort() {
+    if (mAbortSubscribe != null) {
+      mAbortSubscribe.dispose();
+      mAbortSubscribe = null;
     }
+  }
 
-    public List<Map<String, Object>> calculateInstallments(String saleValue, int installmentType) throws Exception {
-        List<PlugPagInstallment> installments = this.mUseCase.calculateInstallments(saleValue, installmentType);
-        List<Map<String, Object>> resultList = new ArrayList<>();
-        
-        for (PlugPagInstallment installment : installments) {
-            Map<String, Object> installmentMap = new HashMap<>();
-            installmentMap.put("quantity", installment.getQuantity());
-            installmentMap.put("amount", installment.getAmount());
-            installmentMap.put("total", installment.getTotal());
-            resultList.add(installmentMap);
-        }
-        
-        return resultList;
-    }
-  
   public void dispose() {
     if (mSubscribe != null) {
       mSubscribe.dispose();
     }
+    disposeAbort();
   }
 }

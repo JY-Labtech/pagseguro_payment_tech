@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -81,6 +81,9 @@ class _PrintRenderPage extends StatefulWidget {
   State<_PrintRenderPage> createState() => _PrinterRenderPageState();
 }
 
+/// Tempo de espera depois de enviar a imagem à impressora, antes de fechar a tela.
+const Duration _printFinishDelay = Duration(seconds: 2);
+
 class _PrinterRenderPageState extends State<_PrintRenderPage> {
   final GlobalKey _globalKey = GlobalKey();
 
@@ -155,6 +158,12 @@ class _PrinterRenderPageState extends State<_PrintRenderPage> {
     final RenderRepaintBoundary? boundary = currentContext.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) {
       return null;
+    }
+
+    // Em debug, capturar um boundary ainda não pintado (ex.: durante a animação de entrada da
+    // rota) dispara a assertion '!debugNeedsPaint'. Aguarda o próximo frame nesse caso.
+    if (kDebugMode && boundary.debugNeedsPaint) {
+      await WidgetsBinding.instance.endOfFrame;
     }
 
     // Captura a imagem da área de renderização.
@@ -282,13 +291,15 @@ class _PrinterRenderPageState extends State<_PrintRenderPage> {
       await widget.pagseguroPayment.payment.printer(imagePath ?? '');
 
       // Aguarda 2 segundos para o processamento e encerra a tela atual.
-      await Future.delayed(const Duration(seconds: 2));
-
-      if (!mounted) return;
-      Navigator.of(context).pop();
-    } on Exception catch (e) {
+      await Future.delayed(_printFinishDelay);
+    } catch (e) {
       // Captura e imprime a mensagem de erro no console.
       debugPrint('Erro ao gerar a imagem.\n\tErro: $e');
+    } finally {
+      // Fecha a tela também em caso de erro (antes ela ficava aberta indefinidamente).
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
     }
   }
 }

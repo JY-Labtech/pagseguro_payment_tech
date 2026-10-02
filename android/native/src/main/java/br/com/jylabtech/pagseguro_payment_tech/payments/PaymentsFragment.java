@@ -1,97 +1,101 @@
 package br.com.jylabtech.pagseguro_payment_tech.payments;
 
-import io.flutter.plugin.common.MethodChannel;
 import java.util.HashMap;
 import java.util.Map;
 
+import br.com.jylabtech.pagseguro_payment_tech.core.EventSink;
+import br.com.jylabtech.pagseguro_payment_tech.core.MainThreadEventSink;
+import io.flutter.plugin.common.MethodChannel;
+
+/**
+ * Eventos de pagamento enviados ao {@code PaymentHandler} do Dart. Os nomes dos métodos são o
+ * contrato com {@code PaymentTypeHandler} (lib/src/payments/utils/payment_types.dart).
+ * Os eventos sempre chegam ao canal pela main thread ({@link MainThreadEventSink}).
+ */
 public class PaymentsFragment implements PaymentsContract {
 
-  final MethodChannel channel;
+  static final String ON_TRANSACTION_SUCCESS = "onTransactionSuccess";
+  static final String ON_ERROR = "onError";
+  static final String ON_MESSAGE = "onMessage";
+  static final String ON_FINISHED_RESPONSE = "onFinishedResponse";
+  static final String ON_LOADING = "onLoading";
+  static final String WRITE_TO_FILE = "writeToFile";
+  static final String ON_ABORTED_SUCCESSFULLY = "onAbortedSuccessfully";
+  static final String DISPOSE_DIALOG = "disposeDialog";
+  static final String ACTIVE_DIALOG = "activeDialog";
+  static final String ON_AUTH_PROGRESS = "onAuthProgress";
+  static final String ON_TRANSACTION_INFO = "onTransactionInfo";
+
+  private final EventSink sink;
 
   public PaymentsFragment(MethodChannel channel) {
-    this.channel = channel;
+    this(new MainThreadEventSink(channel));
   }
 
-  private static final String ON_TRANSACTION_SUCCESS = "onTransactionSuccess";
-  private static final String ON_ERROR = "onError";
-  private static final String ON_MESSAGE = "onMessage";
-  private static final String ON_FINISHED_RESPONSE = "onFinishedResponse";
-  private static final String ON_LOADING = "onLoading";
-  private static final String WRITE_TO_FILE = "writeToFile";
-  private static final String ON_ABORTED_SUCCESSFULLY = "onAbortedSuccessfully";
-  private static final String DISPOSE_DIALOG = "disposeDialog";
-  private static final String ACTIVE_DIALOG = "activeDialog";
-  private static final String ON_AUTH_PROGRESS = "onAuthProgress";
-  private static final String ON_TRANSACTION_INFO = "onTransactionInfo";
+  public PaymentsFragment(EventSink sink) {
+    this.sink = sink;
+  }
 
   @Override
   public void onTransactionSuccess() {
-    this.channel.invokeMethod(ON_TRANSACTION_SUCCESS, true);
+    sink.send(ON_TRANSACTION_SUCCESS, true);
   }
 
   @Override
   public void onError(String message) {
-    this.channel.invokeMethod(ON_ERROR, message);
+    sink.send(ON_ERROR, message);
   }
 
   @Override
   public void onMessage(String message) {
-    this.channel.invokeMethod(ON_MESSAGE, message);
+    sink.send(ON_MESSAGE, message);
   }
 
   @Override
   public void onFinishedResponse(String message) {
-    this.channel.invokeMethod(ON_FINISHED_RESPONSE, message);
+    sink.send(ON_FINISHED_RESPONSE, message);
   }
 
   @Override
   public void onLoading(boolean show) {
-    this.channel.invokeMethod(ON_LOADING, show);
+    sink.send(ON_LOADING, show);
   }
 
   @Override
-  public void writeToFile(
-    String transactionCode,
-    String transactionId,
-    String response
-  ) {
-    Map<String, String> map = new HashMap<String, String>();
-    map.put("transactionCode", transactionCode);
-    map.put("transactionId", transactionId);
-    map.put("response", response);
-    this.channel.invokeMethod(WRITE_TO_FILE, map);
+  public void writeToFile(String transactionCode, String transactionId, String response) {
+    sink.send(WRITE_TO_FILE, transactionMap(transactionCode, transactionId, response));
   }
 
   @Override
   public void onAbortedSuccessfully() {
-    this.channel.invokeMethod(ON_ABORTED_SUCCESSFULLY, true);
+    sink.send(ON_ABORTED_SUCCESSFULLY, true);
   }
 
   @Override
   public void disposeDialog() {
-    this.channel.invokeMethod(DISPOSE_DIALOG, true);
+    sink.send(DISPOSE_DIALOG, true);
   }
 
   @Override
   public void onActivationDialog() {
-    this.channel.invokeMethod(ACTIVE_DIALOG, true);
+    sink.send(ACTIVE_DIALOG, true);
   }
 
   @Override
   public void onAuthProgress(String message) {
-    this.channel.invokeMethod(ON_AUTH_PROGRESS, message);
+    sink.send(ON_AUTH_PROGRESS, message);
   }
 
   @Override
-  public void onTransactionInfo(
-    String transactionCode,
-    String transactionId,
-    String response
-  ) {
-    Map<String, String> map = new HashMap<String, String>();
+  public void onTransactionInfo(String transactionCode, String transactionId, String response) {
+    sink.send(ON_TRANSACTION_INFO, transactionMap(transactionCode, transactionId, response));
+  }
+
+  private static Map<String, String> transactionMap(String transactionCode, String transactionId, String response) {
+    Map<String, String> map = new HashMap<>();
     map.put("transactionCode", transactionCode);
     map.put("transactionId", transactionId);
     map.put("response", response);
-    this.channel.invokeMethod(ON_TRANSACTION_INFO, map);
+    return map;
   }
 }

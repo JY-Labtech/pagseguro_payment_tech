@@ -1,10 +1,11 @@
 package br.com.jylabtech.pagseguro_payment_tech;
 
-import android.content.Context;
-
 import androidx.annotation.NonNull;
 
+import br.com.jylabtech.pagseguro_payment_tech.core.AndroidAsyncExecutor;
+import br.com.jylabtech.pagseguro_payment_tech.core.ChannelRequestHandler;
 import br.com.jylabtech.pagseguro_payment_tech.core.PagSeguroPayment;
+import br.com.jylabtech.pagseguro_payment_tech.licence.LicenceConfig;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -13,45 +14,40 @@ import io.flutter.plugin.common.MethodChannel.Result;
 
 /**
  * Implementação nativa completa do plugin Pagseguro encapsulada no AAR.
- * Recebe as chamadas do método channel e delega para {@link PagSeguroPayment},
- * garantindo que a licença seja configurada via `initPayment`.
+ * Recebe as chamadas do método channel e delega para {@link ChannelRequestHandler}, que aplica o
+ * gate de licença antes de chamar {@link PagSeguroPayment}.
+ *
+ * Toda operação de negócio passa pelo gate de licença: a licença é validada (cache válido ou
+ * servidor oficial) numa thread de background e, só se estiver válida e ativa, a operação é
+ * executada na main thread. Caso contrário o Flutter recebe PlatformException LICENCE_ERROR e o
+ * SDK da PagSeguro não é chamado.
  */
 public final class PagseguroPaymentTechNativePlugin implements FlutterPlugin, MethodCallHandler {
   private static final String CHANNEL_NAME = "pagseguro_payment_tech";
-  private static final String INIT_PAYMENT_METHOD = "initPayment";
 
   private MethodChannel channel;
-  private Context applicationContext;
   private PagSeguroPayment pagseguroPayment;
+  // Thread única: preserva a ordem das validações e tira a rede da main thread.
+  private AndroidAsyncExecutor licenceExecutor;
+  private ChannelRequestHandler requestHandler;
 
   @Override
   public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
     channel = new MethodChannel(binding.getBinaryMessenger(), CHANNEL_NAME);
-    applicationContext = binding.getApplicationContext();
-    pagseguroPayment = new PagSeguroPayment(applicationContext, channel);
+    pagseguroPayment = new PagSeguroPayment(binding.getApplicationContext(), channel);
+    licenceExecutor = new AndroidAsyncExecutor();
+    requestHandler = new ChannelRequestHandler(pagseguroPayment, licenceExecutor);
     channel.setMethodCallHandler(this);
   }
 
   @Override
   public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
-    try {
-      if (INIT_PAYMENT_METHOD.equals(call.method)) {
-        String licenceKey = call.argument("licenceKey");
-        String licenceInternalKey = call.argument("licenceInternalKey");
-        pagseguroPayment.updateLicenceKeys(licenceKey, licenceInternalKey);
-        boolean licenceValid = pagseguroPayment.ensureLicenceValid();
-        result.success(licenceValid);
-        return;
-      }
-
-      if (call.method.startsWith("payment") || "startPayment".equals(call.method)) {
-        pagseguroPayment.handleMethodCall(call, result);
-      } else {
-        result.notImplemented();
-      }
-    } catch (Exception exception) {
-      result.error("ERROR", exception.getMessage(), null);
+    ChannelRequestHandler handler = requestHandler;
+    if (handler == null) {
+      result.error(LicenceConfig.LICENCE_ERROR_CODE, "Plugin não inicializado.", null);
+      return;
     }
+    handler.onMethodCall(call, result);
   }
 
   @Override
@@ -60,10 +56,17 @@ public final class PagseguroPaymentTechNativePlugin implements FlutterPlugin, Me
       channel.setMethodCallHandler(null);
       channel = null;
     }
+    if (requestHandler != null) {
+      requestHandler.dispose();
+      requestHandler = null;
+    }
+    if (licenceExecutor != null) {
+      licenceExecutor.shutdown();
+      licenceExecutor = null;
+    }
     if (pagseguroPayment != null) {
       pagseguroPayment.dispose();
       pagseguroPayment = null;
     }
-    applicationContext = null;
   }
 }

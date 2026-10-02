@@ -4,8 +4,12 @@ import 'package:pagseguro_payment_tech/pagseguro_payment_tech.dart';
 
 import 'payment_controller.dart';
 
-const String _licenceKey = 'sua licenca aqui';
-const String _licenceInternalKey = '***REMOVIDO***';
+const String _licenceKey = String.fromEnvironment('PAGSEGURO_LICENCE_KEY', defaultValue: 'sua licenca aqui');
+// https://licence-server.invalid/pos-payments/licence/check/invoice
+const String _licenceInternalKey = String.fromEnvironment(
+  'PAGSEGURO_LICENCE_INTERNAL_KEY',
+  defaultValue: '***REMOVIDO***',
+);
 
 class PaymentPage extends StatefulWidget {
   const PaymentPage({Key? key}) : super(key: key);

@@ -76,7 +76,9 @@ if [[ -x "${FLUTTER_BIN_PATH}" ]]; then
 fi
 
 echo "[INFO] Limpando e compilando o módulo nativo..."
-FLUTTER_SDK="${FLUTTER_SDK}" JAVA_HOME="${JAVA_HOME}" "${GRADLEW}" -p "${NATIVE_MODULE}" --no-daemon clean assembleRelease
+# flutter.jar é compileOnly e não precisa do Jetifier (que estoura o heap padrão do Gradle).
+FLUTTER_SDK="${FLUTTER_SDK}" JAVA_HOME="${JAVA_HOME}" "${GRADLEW}" -p "${NATIVE_MODULE}" --no-daemon -Dorg.gradle.jvmargs=-Xmx2g \
+  -Pandroid.jetifier.ignorelist=flutter.jar clean assembleRelease
 
 if [[ ! -d "${OUTPUT_DIR}" ]]; then
   echo "[ERRO] Diretório de saída ${OUTPUT_DIR} não encontrado." >&2
