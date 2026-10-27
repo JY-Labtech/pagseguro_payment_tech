@@ -156,6 +156,7 @@ enum PaymentTypeCall {
   REFUND_NFC,
   DEBIT_NFC,
   FORMAT_NFC,
+  READ_NFC_UID,
   PRINTER_FILE,
   START_PAYMENT,
   PRINTER,
@@ -241,6 +242,8 @@ extension PaymentTypeCallExt on PaymentTypeCall {
         return "paymentFormatNfc";
       case PaymentTypeCall.REFUND_NFC:
         return "paymentReFundNfc";
+      case PaymentTypeCall.READ_NFC_UID:
+        return "paymentReadNfcUid";
       case PaymentTypeCall.PRINTER_FILE:
         return "paymentPrinterFile";
       case PaymentTypeCall.PRINTER:

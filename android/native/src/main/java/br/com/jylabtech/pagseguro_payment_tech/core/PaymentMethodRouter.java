@@ -44,6 +44,7 @@ public final class PaymentMethodRouter {
   public static final String REWRITE_NFC = "paymentReWriteNfc";
   public static final String REFUND_NFC = "paymentReFundNfc";
   public static final String DEBIT_NFC = "paymentDebitNfc";
+  public static final String READ_NFC_UID = "paymentReadNfcUid";
 
   public static final String PRINTER_FILE = "paymentPrinterFile";
   public static final String PRINTER = "paymentPrinter";
@@ -60,6 +61,7 @@ public final class PaymentMethodRouter {
   public static final String INVALID_ARGUMENT_CODE = "INVALID_ARGUMENT";
 
   private static final int DEFAULT_MAX_TIME_SHOW_POPUP = 30;
+  private static final int DEFAULT_NFC_UID_TIMEOUT = 20;
 
   /** Operações nativas chamadas pelo roteador (implementadas por {@link PagSeguroPayment}). */
   public interface Operations {
@@ -118,6 +120,9 @@ public final class PaymentMethodRouter {
     void formatNfc() throws Exception;
 
     void debitNfc(String idEvento, String valor) throws Exception;
+
+    /** Espera o cartão por até {@code timeoutSeconds} e devolve o UID em hexadecimal (bloqueante). */
+    String readNfcUid(int timeoutSeconds) throws Exception;
   }
 
   private PaymentMethodRouter() {
@@ -355,6 +360,13 @@ public final class PaymentMethodRouter {
         ops.debitNfc(stringArg(call, "idEvento"), stringArg(call, "valor"));
         reply.success(true);
         return true;
+      case READ_NFC_UID: {
+        // Só lê o identificador do cartão (nada é gravado). Responde com o UID ou ERROR.
+        Integer timeoutArg = call.argument("timeoutSeconds");
+        final int timeout = timeoutArg != null && timeoutArg > 0 ? timeoutArg : DEFAULT_NFC_UID_TIMEOUT;
+        runInBackground(reply, async, () -> ops.readNfcUid(timeout));
+        return true;
+      }
       default:
         return false;
     }

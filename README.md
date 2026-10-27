@@ -444,6 +444,9 @@ await nfc.writeNfc('500', 'Cliente', '12345678901', 'TAG01', '11999999999', 'tru
 
 await nfc.readNfc('evento');                 // readNfc(idEvento)
 await nfc.debitNfc('evento', '500');         // debitNfc(idEvento, valor)
+
+// Só o UID do cartão (nada é gravado): ideal para saldo guardado no servidor.
+final uid = await nfc.readNfcUid(timeoutSeconds: 20); // ex.: '04A1B2C3'
 await nfc.refundNfc('500', 'evento');        // refundNfc(valor, idEvento)
 await nfc.reWriteNfc('500', 'evento');       // reWriteNfc(valor, idEvento)
 await nfc.formatNfc();
