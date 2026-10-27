@@ -301,6 +301,11 @@ public class PagSeguroPayment implements ChannelRequestHandler.Facade {
     public void debitNfc(String idEvento, String valor) {
       nfcPresenter.debitNFCCard(idEvento, valor);
     }
+
+    @Override
+    public String readNfcUid(int timeoutSeconds) throws Exception {
+      return nfcPresenter.readCardUid(timeoutSeconds);
+    }
   };
 
   private void setDialogStyle(MethodCall call) {

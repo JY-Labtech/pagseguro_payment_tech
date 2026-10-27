@@ -124,6 +124,7 @@ void main() {
         PaymentTypeCall.REFUND_NFC: 'paymentReFundNfc',
         PaymentTypeCall.DEBIT_NFC: 'paymentDebitNfc',
         PaymentTypeCall.FORMAT_NFC: 'paymentFormatNfc',
+        PaymentTypeCall.READ_NFC_UID: 'paymentReadNfcUid',
         PaymentTypeCall.PRINTER_FILE: 'paymentPrinterFile',
         PaymentTypeCall.START_PAYMENT: 'startPayment',
         PaymentTypeCall.PRINTER: 'paymentPrinter',

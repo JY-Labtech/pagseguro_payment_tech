@@ -17,6 +17,7 @@ import br.com.uol.pagseguro.plugpagservice.wrapper.data.request.PlugPagLedData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.data.request.PlugPagSimpleNFCData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.exception.PlugPagException;
 import br.com.uol.pagseguro.plugpagservice.wrapper.data.request.PlugPagNFCAuth;
+import br.com.uol.pagseguro.plugpagservice.wrapper.data.result.PlugPagNFCInfosResultDirectly;
 import br.com.jylabtech.pagseguro_payment_tech.helpers.NFCConstants;
 import br.com.jylabtech.pagseguro_payment_tech.helpers.Utils;
 import io.reactivex.Completable;
@@ -29,6 +30,45 @@ public class NFCUseCase {
 
     public NFCUseCase(PlugPag plugPag) {
         mPlugPag = plugPag;
+    }
+
+    /**
+     * Detecta o cartão (Mifare) e devolve o número de série/UID em hexadecimal maiúsculo, sem
+     * autenticar blocos nem gravar nada. Bloqueante.
+     */
+    public String readCardUid(int timeoutSeconds) throws PlugPagException {
+        int resultStartNfc = mPlugPag.startNFCCardDirectly();
+        if (resultStartNfc != 1) {
+            throw new PlugPagException("Ocorreu um erro ao iniciar serviço nfc");
+        }
+        try {
+            PlugPagNFCInfosResultDirectly info = mPlugPag.detectNfcCardDirectly(PlugPagNearFieldCardData.ONLY_M, timeoutSeconds);
+            byte[] serial = info != null ? info.getSerialNumber() : null;
+            if (info == null || info.getResult() != 1 || serial == null || serial.length == 0) {
+                throw new PlugPagException("Cartão não identificado. Encoste o cartão novamente.");
+            }
+            return toHex(serial);
+        } finally {
+            try {
+                mPlugPag.stopNFCCardDirectly();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    public void setLed(byte color) {
+        try {
+            mPlugPag.setLed(new PlugPagLedData(color));
+        } catch (Exception ignored) {
+        }
+    }
+
+    static String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02X", b & 0xFF));
+        }
+        return sb.toString();
     }
 
     public Observable<Integer> writeNfc(PlugPagSimpleNFCData cardData){

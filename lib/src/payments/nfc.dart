@@ -108,6 +108,22 @@ final class Nfc {
 
   Future<bool> refundNfc(dynamic valor, dynamic idEvento) => _invoke(PaymentTypeCall.REFUND_NFC.method, {"valor": valor, "idEvento": idEvento});
 
+  /// Espera o cartão por até [timeoutSeconds] e devolve o UID (número de série) em hexadecimal
+  /// maiúsculo, ex.: `04A1B2C3`. Não autentica blocos nem grava nada no cartão: use o UID como
+  /// chave do cartão no seu servidor. Diferente dos outros métodos NFC, o resultado vem no
+  /// próprio `Future` (não pelo [NfcHandler]). Falha com `PlatformException` (cartão não
+  /// detectado no tempo, erro do leitor ou licença inválida).
+  Future<String> readNfcUid({int timeoutSeconds = 20}) async {
+    if (_instance == null) {
+      throw Exception('Payment instance not initialized. Call Payment.create() first.');
+    }
+    final uid = await _channel.invokeMethod<String>(PaymentTypeCall.READ_NFC_UID.method, {"timeoutSeconds": timeoutSeconds});
+    if (uid == null || uid.isEmpty) {
+      throw PlatformException(code: 'ERROR', message: 'Cartão não identificado.');
+    }
+    return uid.toUpperCase();
+  }
+
   Future<bool> formatNfc() => _invoke(PaymentTypeCall.FORMAT_NFC.method);
 
   Future<bool> debitNfc(dynamic idEvento, dynamic valor) => _invoke(PaymentTypeCall.DEBIT_NFC.method, {"idEvento": idEvento, "valor": valor});

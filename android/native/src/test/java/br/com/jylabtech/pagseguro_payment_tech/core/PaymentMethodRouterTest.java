@@ -100,6 +100,7 @@ public class PaymentMethodRouterTest {
     @Override public void refundNfc(String valor, String idEvento) throws Exception { record("refundNfc:" + valor + ":" + idEvento); }
     @Override public void formatNfc() throws Exception { record("formatNfc"); }
     @Override public void debitNfc(String idEvento, String valor) throws Exception { record("debitNfc:" + idEvento + ":" + valor); }
+    @Override public String readNfcUid(int timeoutSeconds) throws Exception { record("readNfcUid:" + timeoutSeconds); return "04A1B2C3"; }
   }
 
   @Before
@@ -203,6 +204,18 @@ public class PaymentMethodRouterTest {
   }
 
   @Test
+  public void readNfcUidRespondeOUidUmaVez() {
+    RecordingResult result = dispatch("paymentReadNfcUid", args("timeoutSeconds", 15));
+    assertEquals(Collections.singletonList("success"), result.replies);
+    assertEquals("04A1B2C3", result.successValue);
+    assertEquals(Collections.singletonList("readNfcUid:15"), ops.calls);
+
+    ops.calls.clear();
+    dispatch("paymentReadNfcUid", null);
+    assertEquals(Collections.singletonList("readNfcUid:20"), ops.calls);
+  }
+
+  @Test
   public void calculateInstallmentsRespondeAListaUmaVez() {
     Map<String, Object> item = args("quantity", 1, "amount", 1000, "total", 1000);
     ops.installments.add(item);
@@ -215,7 +228,7 @@ public class PaymentMethodRouterTest {
   @Test
   public void falhaDaOperacaoViraUmUnicoErro() {
     ops.toThrow = new IllegalStateException("terminal ocupado");
-    for (String method : new String[] {"paymentDebit", "paymentReadNfc", "paymentPrinterBasic", "paymentGetSerialNumber"}) {
+    for (String method : new String[] {"paymentDebit", "paymentReadNfc", "paymentPrinterBasic", "paymentGetSerialNumber", "paymentReadNfcUid"}) {
       RecordingResult result = dispatch(method, paymentArgs("idEvento", "7", "path", "/x.png"));
       assertEquals(method, Collections.singletonList("error"), result.replies);
       assertEquals(PaymentMethodRouter.ERROR_CODE, result.errorCode);

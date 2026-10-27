@@ -93,6 +93,28 @@ void main() {
     expect(nfcHandler.calls, isEmpty);
   });
 
+  group('readNfcUid', () {
+    test('envia o timeout e devolve o UID em maiúsculas', () async {
+      native.responses['paymentReadNfcUid'] = (_) => '04a1b2c3';
+      expect(await nfc.readNfcUid(timeoutSeconds: 15), '04A1B2C3');
+      expect(native.last('paymentReadNfcUid').arguments, {'timeoutSeconds': 15});
+    });
+
+    test('timeout padrão de 20 s', () async {
+      native.responses['paymentReadNfcUid'] = (_) => 'AA';
+      await nfc.readNfcUid();
+      expect(native.last('paymentReadNfcUid').arguments, {'timeoutSeconds': 20});
+    });
+
+    test('UID vazio ou erro do nativo viram PlatformException', () async {
+      native.responses['paymentReadNfcUid'] = (_) => '';
+      await expectLater(nfc.readNfcUid(), throwsA(isA<PlatformException>()));
+      native.responses.remove('paymentReadNfcUid');
+      native.errorForAll = licenceError;
+      await expectLater(nfc.readNfcUid(), throwsLicenceError);
+    });
+  });
+
   test('sem instância, setHandler e chamadas lançam exceção', () async {
     PagseguroPaymentTech.resetForTesting();
     expect(() => nfc.setHandler(RecordingNfcHandler()), throwsException);

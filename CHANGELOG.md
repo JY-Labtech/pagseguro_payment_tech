@@ -1,3 +1,8 @@
+## 3.4.0
+
+- Novo `nfc.readNfcUid({timeoutSeconds = 20})`: espera o cartão e devolve o UID (número de série) em hexadecimal maiúsculo, sem autenticar blocos nem gravar nada. O resultado vem no próprio `Future` (não pelo `NfcHandler`). Usa `detectNfcCardDirectly` do PlugPag e acende o LED azul/verde/vermelho. Pensado para cashless com saldo no servidor: o cartão vira só um identificador.
+- Testes: JUnit do roteamento (`paymentReadNfcUid`) e testes Dart do método.
+
 ## 3.3.0
 
 **Validação de licença mais rígida.**

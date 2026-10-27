@@ -314,6 +314,24 @@ public class NFCPresenter  {
 
     }
 
+    /**
+     * Lê só o UID do cartão (bloqueante: chamar fora da main thread). Nada é gravado no cartão.
+     * LED azul enquanto espera, verde no sucesso e vermelho na falha.
+     */
+    public String readCardUid(int timeoutSeconds) throws Exception {
+        mUseCase.setLed(PlugPagLedData.LED_BLUE);
+        try {
+            String uid = mUseCase.readCardUid(timeoutSeconds);
+            mUseCase.setLed(PlugPagLedData.LED_GREEN);
+            return uid;
+        } catch (Exception e) {
+            mUseCase.setLed(PlugPagLedData.LED_RED);
+            throw e;
+        } finally {
+            mUseCase.setLed(PlugPagLedData.LED_OFF);
+        }
+    }
+
     public void controlLed(PlugPagLedData plugPagLedData) {
 
         mSubscribe = mUseCase.controlLed(plugPagLedData)
