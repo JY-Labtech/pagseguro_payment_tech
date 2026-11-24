@@ -16,6 +16,8 @@ import java.util.Date;
 public class CheckLicenceTechTest {
 
     private static final long DAY = 24L * 60L * 60L * 1000L;
+    private static final long HOUR = 60L * 60L * 1000L;
+    private static final long MINUTE = 60L * 1000L;
 
     private FakeStorage storage;
     private FakeRemote remote;
@@ -94,19 +96,168 @@ public class CheckLicenceTechTest {
         assertEquals(CORE_URL, remote.lastUrl);
     }
 
+    private void advance(long millis) {
+        now = new Date(now.getTime() + millis);
+    }
+
+    private LicenceResult validate() {
+        return tech.validateLicence(LICENCE_KEY, CORE_BASE64);
+    }
+
     @Test
-    public void validCacheSkipsNetwork() {
-        tech.validateLicence(LICENCE_KEY, CORE_BASE64);
-        now = new Date(NOW.getTime() + 2 * DAY);
-        LicenceResult result = tech.validateLicence(LICENCE_KEY, CORE_BASE64);
-        assertTrue(result.isSuccess());
+    public void firstCheckOfProcessGoesOnlineEvenWithValidCache() {
+        storage.json = validCache(now).toJson();
+        assertTrue(validate().isSuccess());
         assertEquals(1, remote.calls);
+        assertEquals(now, storage.read().getSavedLocalDatabaseAt());
+    }
+
+    @Test
+    public void validCacheSkipsNetworkAfterOnlineCheckUntilRevalidationInterval() {
+        validate();
+        assertEquals(1, remote.calls);
+
+        advance(HOUR);
+        assertTrue(validate().isSuccess());
+        assertEquals(1, remote.calls);
+        assertTrue(tech.validateExistsLicence());
+
+        advance(LicenceConfig.REVALIDATE_INTERVAL_MS);
+        assertTrue(validate().isSuccess());
+        assertEquals(2, remote.calls);
+    }
+
+    @Test
+    public void cacheOnlyShortcutRequiresOnlineCheckInThisProcess() {
+        storage.json = validCache(now).toJson();
+        // app recém-aberto: o atalho sem rede não libera, força a consulta ao servidor
+        assertFalse(tech.validateExistsLicence());
+        assertNotNull(storage.json);
+
+        validate();
+        assertTrue(tech.validateExistsLicence());
+
+        advance(LicenceConfig.REVALIDATE_INTERVAL_MS);
+        assertFalse(tech.validateExistsLicence());
+
+        // servidor fora do ar: o atalho libera pelo cache durante a espera entre tentativas
+        remote.toThrow = new IOException("sem internet");
+        assertTrue(validate().isSuccess());
+        assertTrue(tech.validateExistsLicence());
+        advance(LicenceConfig.RETRY_AFTER_FAILURE_MS);
+        assertFalse(tech.validateExistsLicence());
+    }
+
+    @Test
+    public void customerBlockedClearsCacheAndBlocksImmediately() {
+        validate();
+        advance(LicenceConfig.REVALIDATE_INTERVAL_MS);
+        remote.status = 428;
+        remote.body = "{\"message\":\"A data de expiração da licença é inválida. [-]\",\"reason\":\"customer_blocked\"}";
+
+        LicenceResult result = validate();
+        assertFalse(result.isSuccess());
+        assertTrue(result.isRejectedByServer());
+        assertEquals(LicenceConfig.CUSTOMER_BLOCKED_MESSAGE, result.getErrorMessage());
+        assertNull(storage.json);
+        assertFalse(tech.validateExistsLicence());
+        // sem cache: a próxima operação também consulta o servidor e continua bloqueada
+        assertFalse(validate().isSuccess());
+        assertEquals(3, remote.calls);
+    }
+
+    @Test
+    public void everyDefinitiveRefusalClearsValidCache() {
+        for (int code : new int[]{404, 412, 428, 403, 400}) {
+            setUp();
+            storage.json = validCache(now).toJson();
+            remote.status = code;
+            remote.body = "{\"message\":\"recusada\"}";
+            LicenceResult result = validate();
+            assertFalse("HTTP " + code, result.isSuccess());
+            assertEquals("recusada", result.getErrorMessage());
+            assertNull("HTTP " + code, storage.json);
+        }
+    }
+
+    @Test
+    public void online200CanceledClearsValidCache() {
+        storage.json = validCache(now).toJson();
+        remote.body = coreJson("2027-01-01T00:00:00", false, false, true);
+        LicenceResult result = validate();
+        assertFalse(result.isSuccess());
+        assertTrue(result.isRejectedByServer());
+        assertNull(storage.json);
+    }
+
+    @Test
+    public void outageUsesCacheUpTo72Hours() {
+        validate();
+        remote.toThrow = new IOException("sem internet");
+
+        advance(71 * HOUR);
+        assertTrue(validate().isSuccess());
+        assertNotNull(storage.json);
+
+        advance(HOUR + 1000);
+        LicenceResult result = validate();
+        assertFalse(result.isSuccess());
+        assertTrue(result.getErrorMessage().contains("sem internet"));
+        assertNull(storage.json);
+    }
+
+    @Test
+    public void serverErrorsUseCache() {
+        for (int code : new int[]{500, 502, 503, 408, 429}) {
+            setUp();
+            storage.json = validCache(now).toJson();
+            remote.status = code;
+            remote.body = "{\"message\":\"fora do ar\"}";
+            assertTrue("HTTP " + code, validate().isSuccess());
+            assertNotNull("HTTP " + code, storage.json);
+        }
+    }
+
+    @Test
+    public void unreadable200UsesCache() {
+        storage.json = validCache(now).toJson();
+        remote.body = "<html>captive portal</html>";
+        assertTrue(validate().isSuccess());
+        assertNotNull(storage.json);
+    }
+
+    @Test
+    public void afterOutageWaitsBeforeRetryingServer() {
+        storage.json = validCache(now).toJson();
+        remote.toThrow = new IOException("sem internet");
+        validate();
+        assertEquals(1, remote.calls);
+
+        advance(MINUTE);
+        assertTrue(validate().isSuccess());
+        assertEquals(1, remote.calls);
+
+        advance(LicenceConfig.RETRY_AFTER_FAILURE_MS);
+        remote.toThrow = null;
+        remote.status = 428;
+        remote.body = "{\"message\":\"Licença vencida\"}";
+        assertFalse(validate().isSuccess());
+        assertEquals(2, remote.calls);
+        assertNull(storage.json);
+    }
+
+    @Test
+    public void outageWithoutCacheBlocksAndKeepsTrying() {
+        remote.toThrow = new IOException("sem internet");
+        assertFalse(validate().isSuccess());
+        assertFalse(validate().isSuccess());
+        assertEquals(2, remote.calls);
     }
 
     @Test
     public void staleCacheIsDeletedAndRevalidatedOnline() {
         tech.validateLicence(LICENCE_KEY, CORE_BASE64);
-        now = new Date(NOW.getTime() + 8 * DAY);
+        now = new Date(NOW.getTime() + 73 * HOUR);
         remote.status = 428;
         remote.body = "{\"message\":\"Licença vencida\"}";
         LicenceResult result = tech.validateLicence(LICENCE_KEY, CORE_BASE64);
@@ -174,7 +325,7 @@ public class CheckLicenceTechTest {
         assertFalse(tech.validateExistsLicence());
         tech.validateLicence(LICENCE_KEY, CORE_BASE64);
         assertTrue(tech.validateExistsLicence());
-        now = new Date(NOW.getTime() + 8 * DAY);
+        now = new Date(NOW.getTime() + 72 * HOUR + 1000);
         assertFalse(tech.validateExistsLicence());
         assertNull(storage.json);
     }
