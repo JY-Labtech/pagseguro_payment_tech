@@ -183,7 +183,30 @@ public final class LicenceRules {
     }
 
     /**
-     * Cache sem considerar chave/URL: licença utilizável e salva há no máximo 7 dias
+     * Indica se uma resposta HTTP diferente de 200 é uma recusa definitiva do servidor (licença
+     * não encontrada, vencida, cancelada, suspensa, cliente bloqueado, aparelho desativado, limite
+     * de aparelhos, requisição inválida). 408, 429, 5xx e outros códigos são tratados como falha
+     * temporária (servidor fora do ar), que pode usar o cache offline.
+     */
+    public static boolean isDefinitiveRejection(int statusCode) {
+        return statusCode >= 400 && statusCode < 500 && statusCode != 408 && statusCode != 429;
+    }
+
+    /**
+     * Indica se é hora de consultar o servidor: sem cache, na primeira validação deste processo
+     * (abertura do app) ou quando a última consulta online tem {@link LicenceConfig#REVALIDATE_INTERVAL_MS}
+     * ou mais.
+     */
+    public static boolean shouldRevalidate(CheckLicenceEntity cache, boolean checkedOnlineInThisProcess, Date now) {
+        if (cache == null || !checkedOnlineInThisProcess || now == null) {
+            return true;
+        }
+        Date savedAt = cache.getSavedLocalDatabaseAt();
+        return savedAt == null || now.getTime() - savedAt.getTime() >= LicenceConfig.REVALIDATE_INTERVAL_MS;
+    }
+
+    /**
+     * Cache sem considerar chave/URL: licença utilizável e salva há no máximo 72h
      * (e não no futuro, com tolerância de 5 minutos).
      */
     public static boolean isCacheFresh(CheckLicenceEntity cache, Date now) {
@@ -221,7 +244,9 @@ public final class LicenceRules {
 
     /**
      * Decide o resultado da validação a partir do status HTTP e do corpo da resposta.
-     * Só devolve sucesso para HTTP 200 com licença utilizável.
+     * Só devolve sucesso para HTTP 200 com licença utilizável. Marca
+     * {@link LicenceResult#isRejectedByServer()} para recusas definitivas (4xx exceto 408/429, ou 200
+     * com licença lida mas inutilizável); corpo 200 ilegível (ex.: página de proxy) não é recusa.
      */
     public static LicenceResult evaluateHttpResponse(int statusCode, String body, Date now) {
         if (statusCode == 200) {
@@ -230,11 +255,14 @@ public final class LicenceRules {
                 return LicenceResult.error("Resposta de licença inválida.");
             }
             if (!isLicenceUsable(entity, now)) {
-                return LicenceResult.error(describeUnusable(entity, now));
+                // O servidor leu a licença e ela não pode ser usada: recusa definitiva.
+                return LicenceResult.rejected(describeUnusable(entity, now));
             }
             return LicenceResult.success(entity);
         }
-        return LicenceResult.error(extractErrorMessage(statusCode, body));
+        LicenceResult result = LicenceResult.error(extractErrorMessage(statusCode, body));
+        result.setRejectedByServer(isDefinitiveRejection(statusCode));
+        return result;
     }
 
     static String extractErrorMessage(int statusCode, String body) {
@@ -244,6 +272,9 @@ public final class LicenceRules {
         }
         try {
             JSONObject json = new JSONObject(body);
+            if (LicenceConfig.REASON_CUSTOMER_BLOCKED.equals(json.optString("reason", ""))) {
+                return LicenceConfig.CUSTOMER_BLOCKED_MESSAGE;
+            }
             if (json.isNull("message")) {
                 return fallback;
             }

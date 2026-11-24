@@ -9,6 +9,24 @@ public class LicenceResult {
     private String message;
 
     private CheckLicenceEntity licenceEntity;
+    // true quando o servidor respondeu e recusou a licença de forma definitiva (4xx exceto 408/429,
+    // ou 200 com licença inutilizável). Nesse caso o cache é apagado e o uso é bloqueado na hora;
+    // falhas de rede, timeout, 408/429/5xx e corpo ilegível ficam false e podem usar o cache (até 72h).
+    private boolean rejectedByServer;
+
+    public static LicenceResult rejected(String errorMessage) {
+        LicenceResult licenceResult = error(errorMessage);
+        licenceResult.setRejectedByServer(true);
+        return licenceResult;
+    }
+
+    public boolean isRejectedByServer() {
+        return this.rejectedByServer;
+    }
+
+    public void setRejectedByServer(boolean value) {
+        this.rejectedByServer = value;
+    }
 
     public static LicenceResult success(CheckLicenceEntity entity) {
         LicenceResult licenceResult = new LicenceResult();

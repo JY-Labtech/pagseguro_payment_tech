@@ -152,17 +152,22 @@ final class FakePaymentGateway implements PaymentGateway {
     }
   }
 
-  /** CheckLicenceTech com cache válido (salvo agora, vence em 1 ano). */
+  /**
+   * CheckLicenceTech já liberada pelo gate: validada online agora (vence em 1 ano), como acontece
+   * no plugin antes de qualquer caso de uso. O atalho só-cache exige essa validação no processo.
+   */
   static CheckLicenceTech validLicence() {
     MemoryStorage storage = new MemoryStorage();
     Date now = new Date();
     CheckLicenceEntity entity = new CheckLicenceEntity();
     entity.setExpiredAt(new Date(now.getTime() + 365L * 24 * 60 * 60 * 1000));
-    entity.setSavedLocalDatabaseAt(now);
     entity.setLicenceKey("test-licence-key-0000");
     entity.setLicenceEncrypt("test-licence-key-0000");
-    storage.entity = entity;
-    return licence(storage);
+    CheckLicenceTech tech = new CheckLicenceTech(storage, (url, key) -> LicenceResult.success(entity), Date::new);
+    if (!tech.validateLicence("test-licence-key-0000", null).isSuccess()) {
+      throw new IllegalStateException("licença de teste não validou");
+    }
+    return tech;
   }
 
   /** CheckLicenceTech sem cache (licença nunca validada ou removida). */

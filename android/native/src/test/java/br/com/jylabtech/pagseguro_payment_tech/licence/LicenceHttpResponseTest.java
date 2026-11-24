@@ -85,6 +85,32 @@ public class LicenceHttpResponseTest {
     }
 
     @Test
+    public void refusalsAreDefinitiveAndOutagesAreNot() {
+        for (int code : new int[]{404, 412, 428, 403, 400}) {
+            assertTrue("HTTP " + code, LicenceRules.evaluateHttpResponse(code, "{\"message\":\"x\"}", NOW).isRejectedByServer());
+        }
+        for (int code : new int[]{408, 429, 500, 502, 503, 201, 204}) {
+            assertFalse("HTTP " + code, LicenceRules.evaluateHttpResponse(code, "{\"message\":\"x\"}", NOW).isRejectedByServer());
+        }
+        assertTrue(LicenceRules.evaluateHttpResponse(200, coreJson("2027-01-01T00:00:00", false, false, true), NOW).isRejectedByServer());
+        assertTrue(LicenceRules.evaluateHttpResponse(200, coreJson("2026-09-30T23:59:59", false, false, false), NOW).isRejectedByServer());
+        assertTrue(LicenceRules.evaluateHttpResponse(200, "{\"licenceEncrypt\":\"k\",\"isExpired\":false,\"isInactive\":false}", NOW).isRejectedByServer());
+        assertFalse(LicenceRules.evaluateHttpResponse(200, validCoreJson(), NOW).isRejectedByServer());
+        // corpo ilegível (proxy/captive portal) não é recusa da licença
+        assertFalse(LicenceRules.evaluateHttpResponse(200, "<html>oops</html>", NOW).isRejectedByServer());
+        assertFalse(LicenceRules.evaluateHttpResponse(200, "", NOW).isRejectedByServer());
+        assertFalse(LicenceRules.evaluateHttpResponse(200, null, NOW).isRejectedByServer());
+    }
+
+    @Test
+    public void customerBlockedReasonHasClearMessage() {
+        LicenceResult result = LicenceRules.evaluateHttpResponse(428,
+                "{\"message\":\"A data de expiração da licença é inválida. [-]\",\"reason\":\"customer_blocked\"}", NOW);
+        assertTrue(result.isRejectedByServer());
+        assertEquals("Cliente bloqueado. Entre em contato com a JY Labtech.", result.getErrorMessage());
+    }
+
+    @Test
     public void otherSuccessStatusesAreErrors() {
         assertFalse(LicenceRules.evaluateHttpResponse(201, validCoreJson(), NOW).isSuccess());
         assertFalse(LicenceRules.evaluateHttpResponse(204, null, NOW).isSuccess());

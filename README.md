@@ -59,7 +59,9 @@ final nfc = PagseguroPaymentTech.I.initNfc(handler: MyNfcHandler());
 
 - O plugin envia ao servidor a chave (`Authorization: Bearer licence:<licenceKey>`) e a identificação do aparelho (ANDROID_ID, serial e modelo), com timeout de 15 s.
 - A licença só é liberada se o servidor responder **HTTP 200** com uma licença **válida e ativa**: `expiredAt` no futuro e sem `isExpired`, `isInactive` ou `isCanceled`. Qualquer outra resposta (erro HTTP, timeout, sem internet, JSON inválido, licença vencida/suspensa/cancelada) bloqueia o uso.
-- Se válida, a licença é **armazenada localmente de forma criptografada** e reutilizada **offline** até a data de vencimento (`expiredAt`), por no máximo **7 dias** sem nova consulta ao servidor. Depois disso o terminal precisa de internet para revalidar. Um cache com data de gravação no futuro (relógio adulterado) é descartado.
+- **Revalidação**: a primeira operação depois de abrir o app sempre consulta o servidor; depois, a licença é consultada de novo a cada **4 horas** de uso.
+- **Bloqueio imediato**: se o servidor recusar a licença (cliente bloqueado no portal, licença vencida, cancelada ou suspensa, não encontrada, aparelho desativado ou limite de aparelhos), o cache é apagado e as operações passam a falhar com `LICENCE_ERROR` na hora.
+- **Cache offline**: se válida, a licença é **armazenada localmente de forma criptografada**. O cache só é usado quando o servidor não responde (sem internet, timeout, HTTP 408/429/5xx) e por no máximo **72 horas** desde a última validação online, dentro da validade (`expiredAt`). Depois de uma falha de rede o plugin espera 5 minutos antes de tentar o servidor de novo. Um cache com data de gravação no futuro (relógio adulterado) é descartado.
 - Trocar a `licenceKey` (ou a URL oficial efetiva, por exemplo de `.../check` para `.../check/invoice`) invalida o cache e força uma nova consulta.
 - **Toda operação** (pagamentos, estorno, cancelamento, última transação, ativação/consulta do pinpad, impressão, NFC, dados do usuário, parcelas, beep, reboot, serial e estilo do dialog) confere a licença no nativo antes de chamar o SDK da PagSeguro. A validação roda fora da main thread.
 - Sem licença válida a operação **não é executada** e o Flutter recebe `PlatformException(code: 'LICENCE_ERROR', message: <motivo>)`. Os métodos que retornam `bool`/valor padrão (`activePinpad`, `printer*`, `beep`, `rebootDevice`, `getSerialNumber`, `calculateInstallments`) devolvem `false`/vazio; os demais lançam a exceção. O motivo também chega em `onError`/`onMessage` do `PaymentHandler`.
@@ -79,7 +81,7 @@ final nfc = PagseguroPaymentTech.I.initNfc(handler: MyNfcHandler());
 ### Troubleshooting
 
 - **`PlatformException` com código `LICENCE_ERROR`**: a validação falhou; veja a mensagem da exceção (ou a recebida em `onError`/`onMessage` do seu handler) e consulte a tabela acima.
-- **Sem internet no primeiro uso**: a primeira validação (e as revalidações a cada 7 dias) exige conexão.
+- **Sem internet**: sem nenhuma validação online bem-sucedida nas últimas 72 horas, as operações falham com `LICENCE_ERROR` até o terminal voltar a ter conexão.
 - **Trocou de aparelho**: desative o aparelho antigo no portal para liberar a vaga.
 - **Ainda passa o `licenceInternalKey` antigo**: não é mais necessário; o valor é ignorado e o servidor oficial é usado. Pode remover o parâmetro.
 
@@ -284,7 +286,7 @@ final payment = PagseguroPaymentTech.I.initPayment(
 ```
 
 - Busque a `licenceKey` com segurança (ex.: backend autenticado, serviço de segredos).
-- O módulo nativo valida no servidor oficial, armazena criptografado e reutiliza a licença quando possível (até 7 dias offline). Sem licença válida, toda operação falha com `LICENCE_ERROR`.
+- O módulo nativo valida no servidor oficial, armazena criptografado e revalida a cada 4 horas; sem internet, reutiliza a licença por até 72 horas desde a última validação online. Sem licença válida, toda operação falha com `LICENCE_ERROR`.
 - O parâmetro `maxTimeShowPopUp` configura o tempo máximo (em segundos) que o dialog de impressão da via do cliente permanece visível no SDK PagSeguro.
 
 ---
