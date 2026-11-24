@@ -31,8 +31,12 @@ App Flutter
   `getSerialNumber` (String) e `calculateInstallments` (lista). O resultado de pagamento, impressão
   e NFC chega pelos eventos.
 - **Licença**: toda chamada `payment*`/`startPayment` passa pelo gate (`ChannelRequestHandler`), que
-  valida cache ou servidor em background. Licença inválida devolve `LICENCE_ERROR` sem tocar no SDK.
-  Os casos de uso de pagamento ainda conferem o cache local (segunda barreira).
+  valida em background: a 1ª validação do processo sempre consulta o servidor, depois revalida a
+  cada 4h; recusa do servidor (4xx exceto 408/429, ou 200 com licença inutilizável) apaga o cache e
+  bloqueia; falha de rede/408/429/5xx usa o cache por até 72h desde a última validação online.
+  Licença inválida devolve `LICENCE_ERROR` sem tocar no SDK. Os casos de uso de pagamento ainda
+  conferem o cache local (segunda barreira, `validateExistsLicence`), que só libera se houve
+  validação online no processo há < 4h ou falha de rede há < 5 min.
 - **Resposta única**: `SingleReplyResult` em todas as camadas; o roteador completa cada chamada
   exatamente uma vez (sucesso, `ERROR` ou `notImplemented`).
 
