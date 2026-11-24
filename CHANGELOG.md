@@ -1,10 +1,9 @@
-## Não lançado
+## 3.5.0
 
 - Licença conforme o contrato do jylabtech_core (JYN-234): o cache offline vale por no máximo 72 horas (antes 7 dias) e só é usado quando o servidor não responde (sem internet, timeout, 408/429/5xx).
 - A primeira operação depois de abrir o app consulta o servidor, e a licença é revalidada a cada 4 horas de uso.
 - Recusa do servidor (cliente bloqueado, licença vencida/cancelada/suspensa, não encontrada, aparelho desativado, limite de aparelhos) apaga o cache e bloqueia na hora. `reason: customer_blocked` vira a mensagem "Cliente bloqueado. Entre em contato com a JY Labtech.".
 - A checagem só-cache dos casos de uso de pagamento (segunda barreira, main thread) só libera se a licença foi validada online neste processo há menos de 4 horas ou se o servidor está fora do ar há menos de 5 minutos.
-- O binário `android/libs/pagseguro_payment_tech-native.jar` / `pagseguro_payment_tech-release.aar` precisa ser regerado (`make build-native` ou `scripts/build_android_aar.sh`) na publicação.
 
 ## 3.4.0
 
