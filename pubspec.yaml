@@ -1,19 +1,24 @@
 name: pagseguro_payment_tech
-description: Integre o Flutter com maquinas smarts da Pagseguro, utilizando o SDK do Pagseguro. Rápido e fácil.
-version: 3.5.0
+description: Flutter plugin for PagSeguro Smart POS terminals (PlugPagServiceWrapper SDK) with credit, debit, PIX and voucher payments, refunds, printing and NFC.
+version: 4.0.0
+homepage: https://github.com/JY-Labtech/pagseguro_payment_tech
 repository: https://github.com/JY-Labtech/pagseguro_payment_tech
+issue_tracker: https://github.com/JY-Labtech/pagseguro_payment_tech/issues
+topics:
+  - payment
+  - pos
+  - android
+  - flutter-plugin
+  - brazil
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
-  flutter: ">=3.0.0"
+  sdk: ">=3.2.0 <4.0.0"
+  flutter: ">=3.16.0"
 
 dependencies:
   flutter:
     sdk: flutter
   path_provider: ^2.1.1
-  #check_licence_tech: ^0.1.1
-  #check_licence_tech:
-  #  path: ../check_licence_tech
 
 dev_dependencies:
   flutter_test:

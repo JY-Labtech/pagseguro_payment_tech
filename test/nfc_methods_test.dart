@@ -56,11 +56,11 @@ void main() {
       expect(native.methods, [entry.key]);
     });
 
-    test('${entry.key}: PlatformException genérica e LICENCE_ERROR são propagadas', () async {
+    test('${entry.key}: PlatformException genérica e INVALID_ARGUMENT são propagadas', () async {
       native.errorForAll = genericError;
       await expectLater(entry.value(nfc), throwsGenericError);
-      native.errorForAll = licenceError;
-      await expectLater(entry.value(nfc), throwsLicenceError);
+      native.errorForAll = invalidArgumentError;
+      await expectLater(entry.value(nfc), throwsInvalidArgumentError);
     });
   }
 
@@ -110,8 +110,8 @@ void main() {
       native.responses['paymentReadNfcUid'] = (_) => '';
       await expectLater(nfc.readNfcUid(), throwsA(isA<PlatformException>()));
       native.responses.remove('paymentReadNfcUid');
-      native.errorForAll = licenceError;
-      await expectLater(nfc.readNfcUid(), throwsLicenceError);
+      native.errorForAll = invalidArgumentError;
+      await expectLater(nfc.readNfcUid(), throwsInvalidArgumentError);
     });
   });
 

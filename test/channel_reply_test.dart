@@ -6,7 +6,7 @@ import 'fake_payment_handler.dart';
 
 const _channel = MethodChannel('pagseguro_payment_tech');
 
-/// Contrato do canal após a correção da 3.3.0: com licença válida, o nativo completa o result
+/// Contrato do canal após a correção da 3.3.0: o nativo completa o result
 /// de debitPayment, dos métodos NFC e dos printer* com `true` (o resultado da operação continua
 /// chegando pelos eventos do handler).
 void main() {
@@ -28,8 +28,8 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(_channel, null));
 
   test('debitPayment completa com true', () async {
-    final payment = PagseguroPaymentTech.I.initPayment(handler: FakePaymentHandler(), licenceKey: 'test-licence-key-0000');
-    expect(await payment.licenceReady, isTrue);
+    final payment = PagseguroPaymentTech.I.initPayment(handler: FakePaymentHandler());
+    expect(await payment.ready, isTrue);
 
     expect(await payment.debitPayment(1500).timeout(const Duration(seconds: 1)), isTrue);
     final call = calls.singleWhere((c) => c.method == 'paymentDebit');
@@ -37,8 +37,8 @@ void main() {
   });
 
   test('métodos NFC completam com true', () async {
-    final payment = PagseguroPaymentTech.I.initPayment(handler: FakePaymentHandler(), licenceKey: 'test-licence-key-0000');
-    expect(await payment.licenceReady, isTrue);
+    final payment = PagseguroPaymentTech.I.initPayment(handler: FakePaymentHandler());
+    expect(await payment.ready, isTrue);
     final nfc = PagseguroPaymentTech.I.initNfc(handler: _NoopNfcHandler());
     const timeout = Duration(seconds: 1);
 
@@ -51,8 +51,8 @@ void main() {
   });
 
   test('printer* devolvem true quando o nativo responde success', () async {
-    final payment = PagseguroPaymentTech.I.initPayment(handler: FakePaymentHandler(), licenceKey: 'test-licence-key-0000');
-    expect(await payment.licenceReady, isTrue);
+    final payment = PagseguroPaymentTech.I.initPayment(handler: FakePaymentHandler());
+    expect(await payment.ready, isTrue);
 
     expect(await payment.printerfromFile('/a.png'), isTrue);
     expect(await payment.printerFile('a.png'), isTrue);
@@ -70,8 +70,8 @@ void main() {
   });
 
   test('printer* devolvem false se o nativo não implementa o método (comportamento antigo)', () async {
-    final payment = PagseguroPaymentTech.I.initPayment(handler: FakePaymentHandler(), licenceKey: 'test-licence-key-0000');
-    expect(await payment.licenceReady, isTrue);
+    final payment = PagseguroPaymentTech.I.initPayment(handler: FakePaymentHandler());
+    expect(await payment.ready, isTrue);
     messenger.setMockMethodCallHandler(_channel, (call) async {
       if (call.method.startsWith('paymentPrinter')) throw MissingPluginException();
       return true;

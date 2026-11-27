@@ -27,7 +27,7 @@ void main() {
   setUp(() {
     PagseguroPaymentTech.resetForTesting();
     native = FakeNative();
-    PagseguroPaymentTech.I.initPayment(handler: RecordingPaymentHandler(), licenceKey: testLicenceKey);
+    PagseguroPaymentTech.I.initPayment(handler: RecordingPaymentHandler());
     tempDir = Directory.systemTemp.createTempSync('print_render_test');
   });
 

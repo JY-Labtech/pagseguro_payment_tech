@@ -1,7 +1,6 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 // ignore_for_file: constant_identifier_names
 import 'package:flutter/services.dart';
-import 'package:pagseguro_payment_tech/src/licence/constants/licence_constants.dart';
 import 'package:pagseguro_payment_tech/src/payments/handler/event_dispatcher.dart';
 import 'package:pagseguro_payment_tech/src/payments/handler/payment_handler.dart';
 import 'package:pagseguro_payment_tech/src/payments/utils/input_validation.dart';
@@ -13,14 +12,8 @@ import 'package:pagseguro_payment_tech/src/payments/utils/plugpag_installment.da
 final class Payment {
   final MethodChannel channel;
   PaymentHandler paymentHandler;
-  late String _licenceKey;
-  late String _licenceInternalKey;
   int _maxTimeShowPopUp = 30;
-  Future<bool> _licenceReady = Future<bool>.value(false);
-
-  /// Código do erro devolvido pelo nativo quando a licença é inválida, vencida,
-  /// suspensa, cancelada ou não configurada.
-  static const String licenceErrorCode = 'LICENCE_ERROR';
+  Future<bool> _ready = Future<bool>.value(false);
 
   /// Código do erro para argumento obrigatório ausente/vazio (ex.: estorno sem código/id).
   static const String invalidArgumentCode = 'INVALID_ARGUMENT';
@@ -31,43 +24,31 @@ final class Payment {
   Payment._({
     required this.channel,
     required this.paymentHandler,
-    required String licenceKey,
-    String licenceInternalKey = licenceCheck,
     int maxTimeShowPopUp = 30,
   }) {
-    _licenceKey = licenceKey;
-    _licenceInternalKey = licenceInternalKey;
     _maxTimeShowPopUp = maxTimeShowPopUp;
   }
 
-  /// Método factory para criação controlada e validação da licença.
-  /// [licenceInternalKey] é opcional: o padrão é o servidor oficial da JY Labtech
-  /// e valores fora dele são ignorados pelo nativo.
+  /// Cria (ou reaproveita) a instância única, registra o handler e inicializa o nativo.
   static Payment create({
     required MethodChannel channel,
     required PaymentHandler paymentHandler,
-    required String licenceKey,
-    String licenceInternalKey = licenceCheck,
     int maxTimeShowPopUp = 30,
   }) {
     if (_instance == null) {
       final payment = Payment._(
         channel: channel,
         paymentHandler: paymentHandler,
-        licenceKey: licenceKey,
-        licenceInternalKey: licenceInternalKey,
         maxTimeShowPopUp: maxTimeShowPopUp,
       );
       PagseguroEventDispatcher.attachPayment(payment.channel, paymentHandler);
-      payment._configureLicence();
+      payment._configure();
       _instance = payment;
     } else {
-      _instance!._licenceKey = licenceKey;
-      _instance!._licenceInternalKey = licenceInternalKey;
       _instance!._maxTimeShowPopUp = maxTimeShowPopUp;
       _instance!.paymentHandler = paymentHandler;
       PagseguroEventDispatcher.attachPayment(_instance!.channel, paymentHandler);
-      _instance!._configureLicence();
+      _instance!._configure();
     }
 
     return _instance!;
@@ -84,7 +65,7 @@ final class Payment {
   void _updateHandler(PaymentHandler handler) {
     paymentHandler = handler;
     PagseguroEventDispatcher.attachPayment(channel, handler);
-    _configureLicence();
+    _configure();
   }
 
   /// Limpa a instância em cache (uso interno: PagseguroPaymentTech.resetForTesting).
@@ -93,7 +74,7 @@ final class Payment {
   }
 
   /// Chama um método do nativo que responde `bool`. Resposta nula vira `false` (antes: TypeError).
-  /// Erros do nativo (inclusive `LICENCE_ERROR`) são propagados como [PlatformException].
+  /// Erros do nativo são propagados como [PlatformException].
   Future<bool> _invokeBool(String method, [Map<String, dynamic>? arguments]) async {
     final result = await channel.invokeMethod<bool>(method, arguments);
     return result ?? false;
@@ -117,29 +98,23 @@ final class Payment {
         "isCarne": isCarne,
       };
 
-  /// Resultado da última validação de licença disparada por `initPayment`/`setHandler`.
-  /// `true` somente se o nativo confirmou a licença válida e ativa; `false` em qualquer erro
-  /// (o erro também é entregue em [PaymentHandler.onError]).
-  /// Mesmo assim, toda operação é validada de novo no nativo antes de executar.
-  Future<bool> get licenceReady => _licenceReady;
+  /// Resultado da última inicialização do nativo disparada por `initPayment`/`setHandler`.
+  /// `true` quando o nativo respondeu; `false` em qualquer erro (o erro também é entregue em
+  /// [PaymentHandler.onError]).
+  Future<bool> get ready => _ready;
 
-  void _configureLicence() {
-    _licenceReady = _initLicence();
+  void _configure() {
+    _ready = _initNative();
   }
 
-  Future<bool> _initLicence() async {
+  Future<bool> _initNative() async {
     try {
       final result = await channel.invokeMethod("initPayment", {
-        "licenceKey": _licenceKey,
-        "licenceInternalKey": _licenceInternalKey,
         "maxTimeShowPopUp": _maxTimeShowPopUp,
       });
       return result == true;
     } on PlatformException catch (e) {
-      // LICENCE_ERROR: o nativo já enviou onError/onFinishedResponse ao handler.
-      if (e.code != licenceErrorCode) {
-        paymentHandler.onError(e.message ?? e.code);
-      }
+      paymentHandler.onError(e.message ?? e.code);
       return false;
     } catch (e) {
       paymentHandler.onError(e.toString());
@@ -251,7 +226,7 @@ final class Payment {
   //Emitter beep device
   Future<bool> beep() => _invokeOrFalse(PaymentTypeCall.BEEP.method);
 
-  /// Número de série do terminal; `''` em qualquer erro (inclusive licença inválida).
+  /// Número de série do terminal; `''` em qualquer erro.
   Future<String> getSerialNumber() async {
     try {
       final result = await channel.invokeMethod<String>(PaymentTypeCall.GET_SERIAL_NUMBER.method);

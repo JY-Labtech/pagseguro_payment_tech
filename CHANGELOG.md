@@ -1,3 +1,28 @@
+## 4.0.0
+
+**BREAKING: o plugin agora é open source (MIT) e não tem mais licença nem cobrança.**
+
+- **BREAKING:** a validação de licença e a cobrança foram removidas. Nenhuma chamada HTTP é feita a servidores da JY Labtech; as operações chamam o SDK PlugPag direto.
+- **BREAKING:** parâmetros removidos:
+  - `PagseguroPaymentTech.initPayment`: `licenceKey` e `licenceInternalKey` (fica `handler` e `maxTimeShowPopUp`);
+  - `Payment.create`: `licenceKey` e `licenceInternalKey`.
+- **BREAKING:** membros removidos/renomeados:
+  - `Payment.licenceReady` foi renomeado para `Payment.ready` (`Future<bool>`: `true` quando o nativo respondeu ao `initPayment`);
+  - `Payment.licenceErrorCode` (`'LICENCE_ERROR'`) foi removido; o código `LICENCE_ERROR` não existe mais;
+  - a constante interna `licenceCheck` e o arquivo `lib/src/licence/constants/licence_constants.dart` foram removidos (`USER_REFERENCE` passou para `utils/input_validation.dart`).
+- **BREAKING:** eventos de licença removidos: o `PaymentHandler` não recebe mais `onMessage("Verificando licença")`/`onMessage("Licença ativada")` nem `onFinishedResponse` com `method: "licence"`.
+- `initPayment` com erro do nativo agora entrega o erro em `PaymentHandler.onError` (antes `LICENCE_ERROR` era tratado à parte). A `PagseguroPage` fecha com `resultCode: 9999999` para qualquer `PlatformException` ao iniciar o pagamento.
+- Plugin desanexado da engine responde `PlatformException(code: 'NOT_INITIALIZED')` (antes `LICENCE_ERROR`).
+- Nativo: removidas as classes `licence/*` (`LicenceConfig`, `LicenceRules`, `CheckLicenceTech`, `CheckLicenceEntity`, `LicenceProvider`, `LicenceResult`, `LicenceRemote`, `LicenceStorage`, `EncryptedLicenceStorage`), o gate de licença por operação do `ChannelRequestHandler` (e a thread de validação) e a checagem só-cache dos casos de uso de pagamento. Respostas únicas ao `result`, threads de background e correções anteriores mantidas.
+- Dependências Android removidas: `androidx.security:security-crypto` e `com.squareup.okhttp3:okhttp` (só serviam à licença).
+- Projeto open source sob a licença MIT. O `LICENSE` mantém o copyright original de Gabuldev (2023), de quem o projeto deriva, junto com o da JY Labtech.
+- README reescrito: funcionalidades, requisitos, configuração Android, uso rápido, referência da API, exemplos por operação, erros, testes e guia de migração.
+- `pubspec.yaml`: descrição em inglês, `homepage`, `issue_tracker` e `topics`. Mínimos corrigidos para Flutter `>=3.16.0` e Dart `>=3.2.0` (o pacote já usava `PopScope` e `MediaQuery.sizeOf`, que não existem no Flutter 3.0).
+- Exemplo: sem `--dart-define` nem chaves; `initPayment(handler: controller)`.
+- `.pubignore`: o fonte nativo (`android/native`) continua publicado; adicionado `example/Chaves/`.
+- Testes: removidos os testes de licença; os demais testam que cada operação chega direto ao SDK/canal. 89 JUnit e 118 testes Dart.
+- Binários `android/libs` regenerados sem nenhuma classe de licença.
+
 ## 3.5.0
 
 - Licença conforme o contrato do jylabtech_core (JYN-234): o cache offline vale por no máximo 72 horas (antes 7 dias) e só é usado quando o servidor não responde (sem internet, timeout, 408/429/5xx).

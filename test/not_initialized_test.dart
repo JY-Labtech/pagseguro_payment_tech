@@ -6,7 +6,7 @@ import 'fake_payment_handler.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('sem initPayment (licença não configurada) não há Payment nem NFC', () {
+  test('sem initPayment não há Payment nem NFC', () {
     expect(() => PagseguroPaymentTech.I.payment, throwsException);
     expect(() => PagseguroPaymentTech.I.nfc, throwsException);
     expect(

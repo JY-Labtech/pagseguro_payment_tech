@@ -30,6 +30,7 @@ doc/api/
 
 # --- Somente pub.dev (não vai para o pacote publicado) ---
 doc/
+example/Chaves/
 **/local.properties
 **/key.properties
 **/*.jks

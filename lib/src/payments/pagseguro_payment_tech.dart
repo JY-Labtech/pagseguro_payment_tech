@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:pagseguro_payment_tech/src/payments/handler/event_dispatcher.dart';
-import 'package:pagseguro_payment_tech/src/licence/constants/licence_constants.dart' show licenceCheck;
 import 'package:pagseguro_payment_tech/src/payments/handler/nfc_handler.dart';
 import 'package:pagseguro_payment_tech/src/payments/nfc.dart';
 
@@ -29,22 +28,15 @@ class PagseguroPaymentTech {
     _channel = const MethodChannel(CHANNEL_NAME);
   }
 
-  /// Inicializa o pagamento, registra o handler e valida a licença no servidor da JY Labtech.
-  /// [licenceInternalKey] é opcional (padrão: servidor oficial). Valores fora do servidor
-  /// oficial, inclusive o endereço antigo, são ignorados pelo nativo.
+  /// Inicializa o pagamento e registra o handler. Chamado de novo, troca o handler.
   /// [maxTimeShowPopUp] tempo em segundos do dialog de impressão da via do cliente (padrão: 30).
-  /// Sem licença válida, toda operação falha com `PlatformException(code: 'LICENCE_ERROR')`.
   Payment initPayment({
     required PaymentHandler handler,
-    required String licenceKey,
-    String licenceInternalKey = licenceCheck,
     int maxTimeShowPopUp = 30,
   }) {
     final payment = Payment.create(
       channel: _channel,
       paymentHandler: handler,
-      licenceKey: licenceKey,
-      licenceInternalKey: licenceInternalKey,
       maxTimeShowPopUp: maxTimeShowPopUp,
     );
     _payment = payment;
@@ -62,7 +54,7 @@ class PagseguroPaymentTech {
     }
     if (_payment == null) {
       throw Exception(
-        "Payment não inicializado.\nChame: PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: '...')",
+        "Payment não inicializado.\nChame: PagseguroPaymentTech.I.initPayment(handler: handler)",
       );
     }
     _nfc = Nfc.internal(
@@ -86,7 +78,7 @@ class PagseguroPaymentTech {
   Payment get payment {
     if (_payment == null) {
       throw Exception(
-        "Payment não inicializado.\nChame: PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: '...')",
+        "Payment não inicializado.\nChame: PagseguroPaymentTech.I.initPayment(handler: handler)",
       );
     }
     return _payment!;

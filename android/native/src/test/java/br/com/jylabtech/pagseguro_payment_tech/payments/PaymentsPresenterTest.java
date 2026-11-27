@@ -52,7 +52,7 @@ public class PaymentsPresenterTest {
   public void setUp() {
     gateway = new FakePaymentGateway();
     sink = new RecordingEventSink();
-    presenter = new PaymentsPresenter(new PaymentsUseCase(gateway, FakePaymentGateway.validLicence()), new PaymentsFragment(sink));
+    presenter = new PaymentsPresenter(new PaymentsUseCase(gateway), new PaymentsFragment(sink));
   }
 
   private JSONObject lastFinishedResponse() throws Exception {
@@ -267,19 +267,6 @@ public class PaymentsPresenterTest {
     presenter.beep();
     assertEquals("SN-1", presenter.getSerialNumber());
     assertEquals(Arrays.asList("reboot", "beep", "getSerialNumber"), gateway.calls);
-  }
-
-  @Test
-  public void semLicencaNaoChamaOSdkNemEnviaEventos() {
-    PaymentsPresenter semLicenca = new PaymentsPresenter(new PaymentsUseCase(gateway, FakePaymentGateway.noLicence()), new PaymentsFragment(sink));
-    try {
-      semLicenca.creditPayment(1000, "R", true, false, false);
-      fail();
-    } catch (Exception expected) {
-      assertEquals(PaymentsUseCase.INVALID_LICENCE_MESSAGE, expected.getMessage());
-    }
-    assertTrue(gateway.calls.isEmpty());
-    assertTrue(sink.events.isEmpty());
   }
 
   @Test

@@ -33,11 +33,11 @@ public class SingleReplyResultTest {
     RecordingResult raw = new RecordingResult();
     SingleReplyResult result = SingleReplyResult.wrap(raw);
 
-    result.error("LICENCE_ERROR", "Licença vencida", null);
+    result.error("ERROR", "Terminal ocupado", null);
     result.success(true);
 
     assertEquals(Arrays.asList("error"), raw.replies);
-    assertEquals("LICENCE_ERROR", raw.errorCode);
+    assertEquals("ERROR", raw.errorCode);
   }
 
   @Test

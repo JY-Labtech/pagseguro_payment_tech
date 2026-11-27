@@ -5,10 +5,6 @@ import android.content.Context;
 import java.util.List;
 import java.util.Map;
 
-import br.com.jylabtech.pagseguro_payment_tech.licence.CheckLicenceTech;
-import br.com.jylabtech.pagseguro_payment_tech.licence.LicenceConfig;
-import br.com.jylabtech.pagseguro_payment_tech.licence.LicenceResult;
-import br.com.jylabtech.pagseguro_payment_tech.payments.PaymentsFragment;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagCustomPrinterLayout;
 import br.com.jylabtech.pagseguro_payment_tech.nfc.NFCPresenter;
@@ -18,8 +14,8 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 
 /**
- * Fachada nativa do plugin: guarda as chaves de licença, cria os presenters sobre um único
- * {@link PlugPag} e executa as operações liberadas pelo gate de licença.
+ * Fachada nativa do plugin: cria os presenters sobre um único {@link PlugPag} e executa as
+ * operações pedidas pelo Dart.
  */
 public class PagSeguroPayment implements ChannelRequestHandler.Facade {
   private final PlugPag plugPag;
@@ -29,11 +25,6 @@ public class PagSeguroPayment implements ChannelRequestHandler.Facade {
   private PaymentsPresenter paymentsPresenter;
   private PrinterPresenter printerPresenter;
   private NFCPresenter nfcPresenter;
-
-  private volatile String licenceKey;
-  private volatile String licenceInternalKey;
-  private final CheckLicenceTech licenceTech;
-  private final PaymentsFragment licenceFragment;
 
   private static final int DEFAULT_MAX_TIME_SHOW_POPUP = 30;
   private int maxTimeShowPopup = DEFAULT_MAX_TIME_SHOW_POPUP;
@@ -47,8 +38,6 @@ public class PagSeguroPayment implements ChannelRequestHandler.Facade {
     PlugPag instancePlugPag = new PlugPag(context);
     this.plugPag = instancePlugPag;
     this.mChannel = channel;
-    this.licenceTech = new CheckLicenceTech(context);
-    this.licenceFragment = new PaymentsFragment(channel);
     this.sdkExecutor = new AndroidAsyncExecutor();
     applyPrintDialogLayout();
   }
@@ -75,65 +64,9 @@ public class PagSeguroPayment implements ChannelRequestHandler.Facade {
     this.plugPag.setPlugPagCustomPrinterLayout(customDialog);
   }
 
-  /**
-   * Guarda as chaves de licença. O licenceInternalKey é opcional: valores vazios ou fora do
-   * servidor oficial são substituídos pela URL do core em {@link CheckLicenceTech}.
-   * Chave ausente não lança: a validação seguinte devolve LICENCE_ERROR.
-   */
-  @Override
-  public void updateLicenceKeys(String licenceKey, String licenceInternalKey) {
-    this.licenceKey = licenceKey == null ? null : licenceKey.trim();
-    this.licenceInternalKey = (licenceInternalKey == null || licenceInternalKey.trim().isEmpty())
-        ? LicenceConfig.LICENCE_CHECK_URL
-        : licenceInternalKey.trim();
-    initializePresenters();
-  }
-
-  /**
-   * Valida a licença (cache válido ou servidor). Pode fazer rede: chamar FORA da main thread.
-   * Não toca no MethodChannel.
-   */
-  @Override
-  public LicenceResult checkLicence() {
-    return licenceTech.validateLicence(licenceKey, licenceInternalKey);
-  }
-
-  /** Avisa o Flutter que a licença está sendo verificada (main thread). */
-  @Override
-  public void notifyLicenceChecking() {
-    licenceFragment.onMessage("Verificando licença");
-  }
-
-  /**
-   * Repassa o resultado da validação ao handler do Flutter (main thread), mantendo os mesmos
-   * eventos das versões anteriores (onMessage / onError / onFinishedResponse com method "licence").
-   */
-  @Override
-  public void notifyLicenceResult(LicenceResult licenceResult) {
-    ActionResult result = new ActionResult();
-    result.setMethod("licence");
-    if (licenceResult != null && licenceResult.isSuccess()) {
-      licenceFragment.onMessage("Licença ativada");
-      result.setResult(0);
-      result.setMessage("Licença ativada com sucesso");
-    } else {
-      String errorMessage = licenceErrorMessage(licenceResult);
-      licenceFragment.onMessage(errorMessage);
-      result.setResult(LicenceConfig.RESULT_ERROR);
-      result.setErrorMessage(errorMessage);
-      licenceFragment.onError(errorMessage);
-    }
-    licenceFragment.onFinishedResponse(JsonResults.toJson(result));
-  }
-
-  public static String licenceErrorMessage(LicenceResult licenceResult) {
-    return ChannelRequestHandler.licenceErrorMessage(licenceResult);
-  }
-
   private void initializePresenters() {
     if (this.paymentsPresenter == null) {
-      // Mesma CheckLicenceTech do gate: um único cache/EncryptedSharedPreferences.
-      this.paymentsPresenter = new PaymentsPresenter(this.plugPag, this.mChannel, this.licenceTech);
+      this.paymentsPresenter = new PaymentsPresenter(this.plugPag, this.mChannel);
     }
 
     if (this.printerPresenter == null) {
@@ -150,9 +83,7 @@ public class PagSeguroPayment implements ChannelRequestHandler.Facade {
   }
 
   /**
-   * Executa a operação. Só pode ser chamado DEPOIS de {@link #checkLicence()} devolver sucesso
-   * (o PagseguroPaymentTechNativePlugin garante isso para todo método de negócio).
-   * O result é completado exatamente uma vez por {@link PaymentMethodRouter}; o resultado da
+   * Executa a operação. O result é completado exatamente uma vez por {@link PaymentMethodRouter}; o resultado da
    * transação/impressão/NFC continua chegando pelos eventos do handler.
    */
   @Override

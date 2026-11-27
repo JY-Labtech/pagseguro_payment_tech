@@ -15,7 +15,7 @@ void main() {
   setUp(() {
     PagseguroPaymentTech.resetForTesting();
     native = FakeNative();
-    PagseguroPaymentTech.I.initPayment(handler: RecordingPaymentHandler(), licenceKey: testLicenceKey);
+    PagseguroPaymentTech.I.initPayment(handler: RecordingPaymentHandler());
   });
 
   tearDown(() {
@@ -108,7 +108,7 @@ void main() {
     };
     for (final entry in methods.entries) {
       PagseguroPaymentTech.resetForTesting();
-      PagseguroPaymentTech.I.initPayment(handler: RecordingPaymentHandler(), licenceKey: testLicenceKey);
+      PagseguroPaymentTech.I.initPayment(handler: RecordingPaymentHandler());
       native.calls.clear();
       await openPage(tester, params(type: entry.key, amount: 1));
       await event(tester, 'onFinishedResponse', jsonEncode({'method': 'activate', 'message': 'Terminal ativado'}));
@@ -120,10 +120,10 @@ void main() {
 
   testWidgets('onError fecha a tela com resposta de erro', (tester) async {
     final results = await openPage(tester, params());
-    await event(tester, 'onError', 'Licença vencida');
+    await event(tester, 'onError', 'Transação negada');
     await tester.pumpAndSettle();
     expect(results.single!.resultCode, 9999999);
-    expect(results.single!.errorMessage, 'Licença vencida');
+    expect(results.single!.errorMessage, 'Transação negada');
   });
 
   testWidgets('erro do nativo ao iniciar o pagamento fecha a tela (antes: tela presa)', (tester) async {
@@ -135,16 +135,14 @@ void main() {
     expect(results.single!.errorMessage, 'terminal ocupado');
   });
 
-  testWidgets('LICENCE_ERROR não fecha a tela duas vezes (o onError do nativo já fecha)', (tester) async {
-    native.responses['paymentDebit'] = (_) => throw licenceError;
+  testWidgets('erro do nativo seguido de onError fecha a tela uma vez só', (tester) async {
+    native.responses['paymentDebit'] = (_) => throw invalidArgumentError;
     final results = await openPage(tester, params());
     await event(tester, 'onFinishedResponse', jsonEncode({'method': 'activate', 'message': 'Terminal ativado'}));
-    await tester.pump(const Duration(seconds: 1));
-    expect(results, isEmpty);
-    expect(find.byType(PagseguroPage), findsOneWidget);
-    await event(tester, 'onError', 'Licença vencida');
+    await event(tester, 'onError', 'argumento inválido');
     await tester.pumpAndSettle();
-    expect(results.single!.errorMessage, 'Licença vencida');
+    expect(results.single!.errorMessage, 'argumento inválido');
+    expect(find.byType(PagseguroPage), findsNothing);
   });
 
   testWidgets('cancelar aborta uma única vez', (tester) async {
@@ -159,10 +157,10 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('onFinishedResponse inválido ou de licença é ignorado', (tester) async {
+  testWidgets('onFinishedResponse inválido ou de outro método é ignorado', (tester) async {
     final results = await openPage(tester, params());
     await event(tester, 'onFinishedResponse', 'não é json');
-    await event(tester, 'onFinishedResponse', jsonEncode({'method': 'licence', 'result': 0}));
+    await event(tester, 'onFinishedResponse', jsonEncode({'method': 'userData', 'result': 0}));
     await event(tester, 'onFinishedResponse', jsonEncode([1, 2]));
     await event(tester, 'onAuthProgress', 'x');
     await event(tester, 'onTransactionInfo', {'response': '{}'});

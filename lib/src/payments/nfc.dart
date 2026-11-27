@@ -112,7 +112,7 @@ final class Nfc {
   /// maiúsculo, ex.: `04A1B2C3`. Não autentica blocos nem grava nada no cartão: use o UID como
   /// chave do cartão no seu servidor. Diferente dos outros métodos NFC, o resultado vem no
   /// próprio `Future` (não pelo [NfcHandler]). Falha com `PlatformException` (cartão não
-  /// detectado no tempo, erro do leitor ou licença inválida).
+  /// detectado no tempo ou erro do leitor).
   Future<String> readNfcUid({int timeoutSeconds = 20}) async {
     if (_instance == null) {
       throw Exception('Payment instance not initialized. Call Payment.create() first.');

@@ -2,7 +2,6 @@ package br.com.jylabtech.pagseguro_payment_tech.payments;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -31,7 +30,7 @@ public class PaymentsUseCaseTest {
   @Before
   public void setUp() {
     gateway = new FakePaymentGateway();
-    useCase = new PaymentsUseCase(gateway, FakePaymentGateway.validLicence());
+    useCase = new PaymentsUseCase(gateway);
   }
 
   private static void assertPayment(PlugPagPaymentData data, int type, int amount, int installmentType, int installments,
@@ -117,31 +116,19 @@ public class PaymentsUseCaseTest {
   }
 
   @Test
-  public void semLicencaNenhumPagamentoChamaOSdk() {
-    PaymentsUseCase semLicenca = new PaymentsUseCase(gateway, FakePaymentGateway.noLicence());
-    String[] operations = {"credit", "creditParc", "debit", "voucher", "pix", "start", "abort",
-        "isAuthenticated", "activate", "lastTransaction", "userData", "installments"};
-    for (String operation : operations) {
-      try {
-        switch (operation) {
-          case "credit": semLicenca.doCreditPayment(1, "R", true, false, false); break;
-          case "creditParc": semLicenca.doCreditPaymentParc(1, 3, 2, "R", true, false, false); break;
-          case "debit": semLicenca.doDebitPayment(1, "R", true, false, false); break;
-          case "voucher": semLicenca.doVoucherPayment(1, "R", true, false, false); break;
-          case "pix": semLicenca.doPixPayment(1, "R", true, false, false); break;
-          case "start": semLicenca.doStartPayment(1, 1, 1, 1, "R", true, false, false); break;
-          case "abort": semLicenca.abort(); break;
-          case "isAuthenticated": semLicenca.isAuthenticated(); break;
-          case "activate": semLicenca.initializeAndActivatePinpad("1"); break;
-          case "lastTransaction": semLicenca.getLastTransaction(); break;
-          case "userData": semLicenca.getUserData(); break;
-          default: semLicenca.calculateInstallments("1", 1); break;
-        }
-        fail(operation + " deveria lançar sem licença");
-      } catch (Exception expected) {
-        assertEquals(operation, PaymentsUseCase.INVALID_LICENCE_MESSAGE, expected.getMessage());
-      }
-    }
+  public void criarOsCasosDeUsoNaoChamaOSdk() throws Exception {
+    // As operações só montam o Observable/Single e não tocam no SDK.
+    useCase.doCreditPayment(1, "R", true, false, false);
+    useCase.doCreditPaymentParc(1, 3, 2, "R", true, false, false);
+    useCase.doDebitPayment(1, "R", true, false, false);
+    useCase.doVoucherPayment(1, "R", true, false, false);
+    useCase.doPixPayment(1, "R", true, false, false);
+    useCase.doStartPayment(1, 1, 1, 1, "R", true, false, false);
+    useCase.abort();
+    useCase.isAuthenticated();
+    useCase.initializeAndActivatePinpad("1");
+    useCase.getLastTransaction();
+    useCase.doRefund("C", "I");
     assertEquals(Collections.emptyList(), gateway.calls);
   }
 
@@ -231,17 +218,5 @@ public class PaymentsUseCaseTest {
     List<PlugPagInstallment> installments = useCase.calculateInstallments("2000", 3);
     assertEquals(1, installments.size());
     assertTrue(gateway.calls.contains("calculateInstallments:2000:3"));
-  }
-
-  @Test
-  public void licencaNulaTambemBloqueia() {
-    PaymentsUseCase semTech = new PaymentsUseCase(gateway, null);
-    try {
-      semTech.getUserData();
-      fail();
-    } catch (Exception expected) {
-      assertEquals(PaymentsUseCase.INVALID_LICENCE_MESSAGE, expected.getMessage());
-    }
-    assertNull(gateway.lastVoid);
   }
 }

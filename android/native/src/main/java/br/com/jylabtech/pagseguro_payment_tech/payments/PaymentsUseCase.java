@@ -1,13 +1,10 @@
 package br.com.jylabtech.pagseguro_payment_tech.payments;
 
-import android.content.Context;
-
 import java.util.List;
 
 import br.com.jylabtech.pagseguro_payment_tech.core.ActionResult;
 import br.com.jylabtech.pagseguro_payment_tech.core.ResultMappers;
 import br.com.jylabtech.pagseguro_payment_tech.core.UserDataResult;
-import br.com.jylabtech.pagseguro_payment_tech.licence.CheckLicenceTech;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagInitializationResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagInstallment;
@@ -15,7 +12,6 @@ import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagPaymentData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagTransactionResult;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagVoidData;
 import br.com.uol.pagseguro.plugpagservice.wrapper.exception.PlugPagException;
-import io.flutter.plugin.common.MethodChannel;
 import io.reactivex.Single;
 import io.reactivex.Observable;
 import io.reactivex.ObservableEmitter;
@@ -33,53 +29,37 @@ public class PaymentsUseCase {
 
   static final int INSTALLMENT_TYPE_A_VISTA = 1;
 
-  /** Mensagem do erro lançado quando o cache local da licença não existe ou venceu. */
-  static final String INVALID_LICENCE_MESSAGE = "Licença inválida ou não foi inicializada!";
-
   private final PaymentGateway mGateway;
-  private final CheckLicenceTech licenceTech;
 
-  public PaymentsUseCase(PaymentGateway gateway, CheckLicenceTech licenceTech) {
+  public PaymentsUseCase(PaymentGateway gateway) {
     this.mGateway = gateway;
-    this.licenceTech = licenceTech;
   }
 
-  public PaymentsUseCase(PlugPag plugPag, CheckLicenceTech licenceTech) {
-    this(new PlugPagPaymentGateway(plugPag), licenceTech);
-  }
-
-  /** Construtor legado: cria a própria validação de licença. Prefira compartilhar a instância. */
-  public PaymentsUseCase(PlugPag plugPag, Context context, MethodChannel channel) {
-    this(new PlugPagPaymentGateway(plugPag), new CheckLicenceTech(context));
+  public PaymentsUseCase(PlugPag plugPag) {
+    this(new PlugPagPaymentGateway(plugPag));
   }
 
   public Observable<ActionResult> doCreditPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
-    isValidLicence();
     return doPayment(paymentData(TYPE_CREDITO, value, INSTALLMENT_TYPE_A_VISTA, 1, userReference, printReceipt, partialPay, isCarne));
   }
 
   public Observable<ActionResult> doCreditPaymentParc(int value, int type, int parc, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
-    isValidLicence();
     return doPayment(paymentData(TYPE_CREDITO, value, type, parc, userReference, printReceipt, partialPay, isCarne));
   }
 
   public Observable<ActionResult> doDebitPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
-    isValidLicence();
     return doPayment(paymentData(TYPE_DEBITO, value, INSTALLMENT_TYPE_A_VISTA, 1, userReference, printReceipt, partialPay, isCarne));
   }
 
   public Observable<ActionResult> doVoucherPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
-    isValidLicence();
     return doPayment(paymentData(TYPE_VOUCHER, value, INSTALLMENT_TYPE_A_VISTA, 1, userReference, printReceipt, partialPay, isCarne));
   }
 
   public Observable<ActionResult> doPixPayment(int value, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
-    isValidLicence();
     return doPayment(paymentData(TYPE_PIX, value, INSTALLMENT_TYPE_A_VISTA, 1, userReference, printReceipt, partialPay, isCarne));
   }
 
   public Observable<ActionResult> doStartPayment(int type, int amount, int installmentType, int installments, String userReference, Boolean printReceipt, Boolean partialPay, Boolean isCarne) throws Exception {
-    isValidLicence();
     return doPayment(paymentData(type, amount, installmentType, installments, userReference, printReceipt, partialPay, isCarne));
   }
 
@@ -139,12 +119,10 @@ public class PaymentsUseCase {
 
   /** Aborta a operação atual; emite {@code true} se o SDK confirmou o abort. */
   public Single<Boolean> abort() throws Exception {
-    isValidLicence();
     return Single.fromCallable(mGateway::abort);
   }
 
   public Observable<Boolean> isAuthenticated() throws Exception {
-    isValidLicence();
     return Observable.create(emitter -> {
       emitter.onNext(mGateway.isAuthenticated());
       emitter.onComplete();
@@ -152,7 +130,6 @@ public class PaymentsUseCase {
   }
 
   public Observable<ActionResult> initializeAndActivatePinpad(String activationCode) throws Exception {
-    isValidLicence();
     return Observable.create(emitter -> {
       ActionResult actionResult = new ActionResult();
       mGateway.setEventListener((eventCode, customMessage) -> {
@@ -180,7 +157,6 @@ public class PaymentsUseCase {
   }
 
   public Observable<ActionResult> getLastTransaction() throws Exception {
-    isValidLicence();
     return Observable.create(emitter -> {
       ActionResult actionResult = new ActionResult();
       PlugPagTransactionResult result = mGateway.getLastApprovedTransaction();
@@ -202,20 +178,11 @@ public class PaymentsUseCase {
     return mGateway.getSerialNumber();
   }
 
-  private void isValidLicence() throws Exception {
-    if (licenceTech != null && licenceTech.validateExistsLicence()) {
-      return;
-    }
-    throw new Exception(INVALID_LICENCE_MESSAGE);
-  }
-
   public UserDataResult getUserData() throws Exception {
-    isValidLicence();
     return ResultMappers.toUserDataResult(mGateway.getUserData());
   }
 
   public List<PlugPagInstallment> calculateInstallments(String saleValue, int installmentType) throws Exception {
-    isValidLicence();
     return mGateway.calculateInstallments(saleValue, installmentType);
   }
 }

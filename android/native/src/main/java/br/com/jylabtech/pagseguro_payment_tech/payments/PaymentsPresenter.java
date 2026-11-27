@@ -1,7 +1,5 @@
 package br.com.jylabtech.pagseguro_payment_tech.payments;
 
-import android.content.Context;
-
 import java.util.List;
 import java.util.Map;
 
@@ -10,7 +8,6 @@ import br.com.jylabtech.pagseguro_payment_tech.core.BaseResult;
 import br.com.jylabtech.pagseguro_payment_tech.core.JsonResults;
 import br.com.jylabtech.pagseguro_payment_tech.core.ResultMappers;
 import br.com.jylabtech.pagseguro_payment_tech.core.UserDataResult;
-import br.com.jylabtech.pagseguro_payment_tech.licence.CheckLicenceTech;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag;
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagEventData;
 import io.flutter.plugin.common.MethodChannel;
@@ -40,13 +37,8 @@ public class PaymentsPresenter {
     this.mFragment = fragment;
   }
 
-  public PaymentsPresenter(PlugPag plugPag, MethodChannel channel, CheckLicenceTech licenceTech) {
-    this(new PaymentsUseCase(plugPag, licenceTech), new PaymentsFragment(channel));
-  }
-
-  /** Construtor legado: cria a própria validação de licença. */
-  public PaymentsPresenter(PlugPag plugPag, MethodChannel channel, Context context) {
-    this(new PaymentsUseCase(plugPag, context, channel), new PaymentsFragment(channel));
+  public PaymentsPresenter(PlugPag plugPag, MethodChannel channel) {
+    this(new PaymentsUseCase(plugPag), new PaymentsFragment(channel));
   }
 
   public void rebootDevice() throws Exception {

@@ -11,7 +11,7 @@ enum _Target { payment, nfc }
 ///
 /// `Payment` e `Nfc` usam o mesmo MethodChannel. Antes, cada um chamava
 /// `setMethodCallHandler` e o último registrado "roubava" o canal: depois de `initNfc`, o
-/// `onFinishedResponse` (licença, transação) e os eventos de pagamento caíam no handler NFC (que
+/// `onFinishedResponse` (transação, dados do usuário) e os eventos de pagamento caíam no handler NFC (que
 /// não os conhece) e eram perdidos; depois de `Payment.setHandler`, os eventos NFC (`show*`) eram
 /// perdidos. Agora:
 /// - eventos exclusivos do NFC (`show*`) vão sempre para o [NfcHandler];

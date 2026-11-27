@@ -4,7 +4,6 @@ import 'dart:developer';
 
 import 'package:flutter/services.dart';
 import 'package:pagseguro_payment_tech/src/payments/pagseguro_payment_tech.dart';
-import 'package:pagseguro_payment_tech/src/payments/payment.dart';
 import 'package:pagseguro_payment_tech/src/payments/utils/payment_types.dart';
 
 import '../enum/pagseguro_payment_type.dart' show PagseguroPaymentType;
@@ -57,14 +56,10 @@ class PagseguroController {
     _guard(_pagseguroTech.payment.isAuthenticated());
   }
 
-  /// Acompanha uma chamada ao nativo. `LICENCE_ERROR` já chega ao handler como onError; qualquer
-  /// outro erro (ex.: PlatformException "ERROR") encerra a tela com a resposta de erro em vez de
+  /// Acompanha uma chamada ao nativo. Qualquer erro (ex.: PlatformException "ERROR") encerra a tela com a resposta de erro em vez de
   /// deixar o Future falhar sem tratamento e a tela presa em "Aguarde...".
   void _guard(Future<dynamic> call) {
     unawaited(call.then<void>((_) {}, onError: (Object error) {
-      if (error is PlatformException && error.code == Payment.licenceErrorCode) {
-        return;
-      }
       final message = error is PlatformException ? (error.message ?? error.code) : error.toString();
       log('***Erro_pagseguro: $message');
       final onPopResult = _onPopResult;

@@ -1,5 +1,8 @@
 import 'package:flutter/services.dart';
-import 'package:pagseguro_payment_tech/src/licence/constants/licence_constants.dart' show USER_REFERENCE;
+
+/// `userReference` padrão enviado ao SDK (só letras e números).
+// ignore: constant_identifier_names
+const String USER_REFERENCE = 'SMARTPOS';
 
 /// Código do erro para argumento obrigatório ausente/vazio (o nativo usa o mesmo código).
 const String invalidArgumentCode = 'INVALID_ARGUMENT';

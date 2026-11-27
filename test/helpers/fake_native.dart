@@ -4,7 +4,6 @@ import 'package:pagseguro_payment_tech/pagseguro_payment_tech.dart';
 
 const channelName = 'pagseguro_payment_tech';
 const channel = MethodChannel(channelName);
-const testLicenceKey = 'test-licence-key-0000';
 
 /// Simula o lado nativo do canal: registra as chamadas e responde conforme configurado.
 class FakeNative {
@@ -53,10 +52,10 @@ class FakeNative {
 }
 
 /// Erros simulados do nativo.
-final licenceError = PlatformException(code: 'LICENCE_ERROR', message: 'Licença vencida');
+final invalidArgumentError = PlatformException(code: 'INVALID_ARGUMENT', message: 'argumento inválido');
 final genericError = PlatformException(code: 'ERROR', message: 'terminal ocupado');
 
-final throwsLicenceError = throwsA(isA<PlatformException>().having((e) => e.code, 'code', 'LICENCE_ERROR'));
+final throwsInvalidArgumentError = throwsA(isA<PlatformException>().having((e) => e.code, 'code', 'INVALID_ARGUMENT'));
 final throwsGenericError = throwsA(isA<PlatformException>().having((e) => e.code, 'code', 'ERROR'));
 
 /// PaymentHandler que registra cada callback como "nome:argumentos".
@@ -170,10 +169,10 @@ class RecordingNfcHandler implements NfcHandler {
   void onTransactionInfo({String? transactionCode, String? transactionId}) => calls.add('onTransactionInfo:$transactionCode|$transactionId');
 }
 
-/// Inicializa o Payment com licença válida e limpa as chamadas registradas.
+/// Inicializa o Payment e limpa as chamadas registradas.
 Future<Payment> initPayment(FakeNative native, PaymentHandler handler) async {
-  final payment = PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: testLicenceKey);
-  expect(await payment.licenceReady, isTrue);
+  final payment = PagseguroPaymentTech.I.initPayment(handler: handler);
+  expect(await payment.ready, isTrue);
   native.calls.clear();
   return payment;
 }

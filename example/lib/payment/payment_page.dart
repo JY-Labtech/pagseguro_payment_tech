@@ -4,13 +4,6 @@ import 'package:pagseguro_payment_tech/pagseguro_payment_tech.dart';
 
 import 'payment_controller.dart';
 
-const String _licenceKey = String.fromEnvironment('PAGSEGURO_LICENCE_KEY', defaultValue: 'sua licenca aqui');
-// https://licence-server.invalid/pos-payments/licence/check/invoice
-const String _licenceInternalKey = String.fromEnvironment(
-  'PAGSEGURO_LICENCE_INTERNAL_KEY',
-  defaultValue: '***REMOVIDO***',
-);
-
 class PaymentPage extends StatefulWidget {
   const PaymentPage({Key? key}) : super(key: key);
 
@@ -31,22 +24,7 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   void _initializePayment() {
-    assert(
-      _licenceKey.isNotEmpty && _licenceInternalKey.isNotEmpty,
-      'Defina PAGSEGURO_LICENCE_KEY e PAGSEGURO_LICENCE_INTERNAL_KEY via --dart-define.',
-    );
-
-    if (_licenceKey.isEmpty || _licenceInternalKey.isEmpty) {
-      throw StateError(
-        'Defina PAGSEGURO_LICENCE_KEY e PAGSEGURO_LICENCE_INTERNAL_KEY via --dart-define para executar o exemplo.',
-      );
-    }
-
-    PagseguroPaymentTech.I.initPayment(
-      handler: controller,
-      licenceKey: _licenceKey,
-      licenceInternalKey: _licenceInternalKey,
-    );
+    PagseguroPaymentTech.I.initPayment(handler: controller);
   }
 
   @override

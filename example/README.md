@@ -1,24 +1,26 @@
 # Exemplo `pagseguro_payment_tech`
 
-Aplicativo demonstrativo que exercita pagamentos, NFC e impressão usando o plugin.
+Aplicativo demonstrativo que exercita pagamentos (débito, crédito à vista e parcelado, voucher e
+PIX), ativação do terminal, cancelamento, última transação, estorno e impressão usando o plugin.
 
-## Como testar
+## Como rodar
 
-1. Garanta que os binários nativos (`android/libs/pagseguro_payment_tech-release.aar` e `pagseguro_payment_tech-native.jar`) estejam atualizados.
-2. Conecte um Smart POS com o **PlugPagService** instalado.
-3. Rode o app definindo as chaves de licença via `--dart-define`:
+1. Conecte uma maquininha PagSeguro Smart com o **PlugPagService** instalado e atualizado.
+2. Na raiz do plugin, garanta que os binários nativos (`android/libs/pagseguro_payment_tech-release.aar`
+   e `pagseguro_payment_tech-native.jar`) estejam atualizados (`sh scripts/build_android_aar.sh`
+   depois de mudar `android/native`).
+3. Rode:
+
    ```bash
-   flutter run \
-     --dart-define=PAGSEGURO_LICENCE_KEY=SUA_LICENCE_KEY \
-     --dart-define=PAGSEGURO_LICENCE_INTERNAL_KEY=***REMOVIDO***
+   cd example
+   flutter pub get
+   flutter run
    ```
-   A licença é adquirida em https://portal.jylabtech.com.br (o plano `debug`, com 2 aparelhos, é concedido como cortesia no cadastro). Se `PAGSEGURO_LICENCE_INTERNAL_KEY` não for informado, o exemplo usa o novo endereço de validação por padrão.
+
+Não há chave, licença nem `--dart-define` para configurar.
 
 ## Código relevante
 
-- `lib/payment/payment_page.dart`: fluxo principal de pagamento e impressora.
-- `lib/payment/payment_controller.dart`: implementação de `PaymentHandler`.
-- `lib/payment/nfc_page.dart`: operações NFC (ler, gravar, debitar, estornar).
-
-> **Dica:** para executar testes automatizados ou pipelines, injete as chaves através de variáveis de ambiente seguras e repasse-as para o comando `flutter run`/`flutter test` via `--dart-define`.
-
+- `lib/payment/payment_page.dart`: inicialização (`PagseguroPaymentTech.I.initPayment`), botões de
+  pagamento, cancelamento, última transação, estorno e impressão.
+- `lib/payment/payment_controller.dart`: implementação de `PaymentHandler` (recebe os eventos do SDK).

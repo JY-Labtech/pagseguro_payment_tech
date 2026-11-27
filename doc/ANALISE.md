@@ -1,4 +1,7 @@
-# Análise técnica: pagseguro_payment_tech 3.3.0
+# Análise técnica: pagseguro_payment_tech 4.0.0
+
+> 4.0.0: o plugin virou open source (MIT). A validação de licença e a cobrança foram removidas
+> (Dart e nativo); as operações chamam o SDK direto. As correções da 3.3.0 descritas abaixo continuam valendo.
 
 Escopo: API Dart pública, MethodChannel `pagseguro_payment_tech` (nos dois sentidos), módulo nativo
 pré-compilado (`android/native`, distribuído em `android/libs`) até o SDK PlugPag
@@ -14,7 +17,7 @@ App Flutter
   PagseguroEventDispatcher ◄──eventos (onMessage, show*...)──  PagseguroPaymentTechPlugin (bridge, android/src)
                                                                          │
                                                 PagseguroPaymentTechNativePlugin (AAR) ─► ChannelRequestHandler
-                                                                         │   gate de licença (thread de background)
+                                                                         │   initPayment / roteamento (main thread)
                                                                          ▼
                                                 PagSeguroPayment ─► PaymentMethodRouter (resposta única)
                                                  │                       │ chamadas bloqueantes ─► AsyncExecutor (background)
@@ -30,58 +33,51 @@ App Flutter
 - **Resposta do `invokeMethod`**: indica só que a operação foi disparada (`true`), salvo
   `getSerialNumber` (String) e `calculateInstallments` (lista). O resultado de pagamento, impressão
   e NFC chega pelos eventos.
-- **Licença**: toda chamada `payment*`/`startPayment` passa pelo gate (`ChannelRequestHandler`), que
-  valida em background: a 1ª validação do processo sempre consulta o servidor, depois revalida a
-  cada 4h; recusa do servidor (4xx exceto 408/429, ou 200 com licença inutilizável) apaga o cache e
-  bloqueia; falha de rede/408/429/5xx usa o cache por até 72h desde a última validação online.
-  Licença inválida devolve `LICENCE_ERROR` sem tocar no SDK. Os casos de uso de pagamento ainda
-  conferem o cache local (segunda barreira, `validateExistsLicence`), que só libera se houve
-  validação online no processo há < 4h ou falha de rede há < 5 min.
 - **Resposta única**: `SingleReplyResult` em todas as camadas; o roteador completa cada chamada
   exatamente uma vez (sucesso, `ERROR` ou `notImplemented`).
 
 ## 2. Tabela por método (Dart → canal → nativo)
 
-Legenda. **Gate**: passa pela validação de licença antes do SDK. **Testado**: D = teste Dart
-(argumentos, sucesso, `PlatformException` genérica e `LICENCE_ERROR`); N = JUnit (gate, roteamento
-com sucesso/erro/resposta única e, onde indicado, caso de uso/presenter com SDK fake).
+Legenda. **Testado**: D = teste Dart (argumentos, sucesso e `PlatformException`); N = JUnit
+(`ChannelRequestHandler`, roteamento com sucesso/erro/resposta única e, onde indicado, caso de
+uso/presenter com SDK fake).
 
-| Método Dart | Método do canal | Handler nativo → SDK | Gate? | Resposta (sucesso / erro) | Testado? | Problemas encontrados |
-|---|---|---|---|---|---|---|
-| `PagseguroPaymentTech.initPayment` / `Payment.create` / `Payment.setHandler` | `initPayment` | `ChannelRequestHandler` → `PagSeguroPayment.updateLicenceKeys` + `checkLicence` | é o próprio gate | `true` (`licenceReady` = true) / `LICENCE_ERROR` (o nativo já envia `onError` + `onFinishedResponse` method `licence`) | D, N | Nenhum novo. |
-| `Payment.setPrintDialogMaxTime` | `paymentSetPrintDialogMaxTime` | `ChannelRequestHandler` (fora do gate, configuração local) → `PlugPagCustomPrinterLayout` | Não (de propósito) | `true` / `ERROR` | D, N | **Corrigido:** criava um layout novo e descartava o estilo de `setDialogstyle` (o mesmo acontecia em todo `initPayment`). |
-| `Payment.setDialogstyle` | `paymentStyleDialog` | Router → `PagSeguroPayment.setDialogStyle` → `setPlugPagCustomPrinterLayout` | Sim | `true` / `ERROR`, `LICENCE_ERROR` | D, N | **Otimizado:** recriava os 3 presenters sem necessidade. `maxTimeShowPopUp` nulo dava NPE (agora usa 30). |
-| `Payment.activePinpad` | `paymentActivePinpad` | Router → `PaymentsPresenter.activate` → `initializeAndActivatePinpad` | Sim | `true` + `onAuthProgress`/`onFinishedResponse` (method `activate`) / `false` (erro tratado) | D, N (presenter + caso de uso) | Mensagem de erro nula enviada ao Dart (corrigido). |
-| `Payment.creditPayment` | `paymentCredit` | Router → `PaymentsPresenter.creditPayment` → `PaymentsUseCase.doCreditPayment` → `doPayment(TYPE_CREDITO, À vista)` | Sim | `true` + eventos (`writeToFile`, `onMessage`, `onFinishedResponse`, `onTransactionSuccess`) / `ERROR`, `LICENCE_ERROR` | D, N (presenter + caso de uso) | **Corrigidos:** `onTransactionSuccess` nunca chegava ao Dart (nome divergente); terminal não ativado enviava `activeDialog` da thread io (rejeitado pelo Flutter) e podia dar NPE em `mSubscribe`; erro sem mensagem chegava `null` e quebrava o `onError` no Dart. |
-| `Payment.creditPaymentParc` | `paymentCreditParc` | idem → `doPayment(TYPE_CREDITO, type, parc)` | Sim | idem | D, N | Idem acima. |
-| `Payment.debitPayment` | `paymentDebit` | idem → `doPayment(TYPE_DEBITO)` | Sim | idem | D, N | Idem acima. |
-| `Payment.pixPayment` | `paymentPix` | idem → `doPayment(TYPE_PIX)` | Sim | idem | D, N | Idem acima. |
-| `Payment.voucherPayment` | `paymentVoucher` | idem → `doPayment(TYPE_VOUCHER)` | Sim | idem | D, N | Idem acima. |
-| `Payment.startPayment` | `startPayment` | idem → `doPayment(type, amount, installmentType, installments)` | Sim | idem | D, N | Idem acima. |
-| `Payment.abortTransaction` / `Nfc.abortTransaction` | `paymentAbort` | Router → `PaymentsPresenter.abortTransaction` → `PlugPag.abort` (`PlugPagAbortResult`) | Sim | `true` + `onAbortedSuccessfully` se o SDK confirmar / `ERROR`, `LICENCE_ERROR`, `onError` | D, N | **Corrigidos:** falha do SDK derrubava o app (`subscribe()` sem `onError`); sobrescrevia `mSubscribe` da transação (vazamento); o `Completable` nunca completava; `onAbortedSuccessfully` nunca era enviado. |
-| `Payment.lastTransaction` / `Nfc.lastTransaction` | `paymentLastTransaction` | Router → `getLastTransaction` → `getLastApprovedTransaction` | Sim | `true` + `onTransactionInfo` / `onError` | D, N | **Corrigido:** `Integer` nulo do SDK (`result`, `originalAmount`, `paymentType`) gerava NPE. |
-| `Payment.refund` / `Nfc.refund` | `paymentRefund` | Router (valida código/id) → `doRefund` → `voidPayment(code, id, print=true)` | Sim | `true` + eventos / `INVALID_ARGUMENT` (Dart e nativo, sem chamar o SDK), `ERROR`, `LICENCE_ERROR` | D, N | **Corrigido:** código/id nulos chegavam ao SDK. Mesma correção de NPE acima. |
-| `Payment.isAuthenticated` | `paymentIsAuthenticated` | Router → `isAuthenticate` → `PlugPag.isAuthenticated` | Sim | `true` + `onAuthProgress` + `onFinishedResponse` (method `activate`) | D, N | Mensagem de erro nula (corrigido). |
-| `Payment.printerfromFile` | `paymentPrinterFile` | Router (**background**) → `PrinterPresenter.printerFromFile` → `printFromFile` | Sim | `true` / `false` | D, N (router) | **Otimizado:** impressão síncrona rodava na main thread (risco de ANR). |
-| `Payment.printerFile` | `paymentPrinter` | Router → `printFile` → `PrintFileResolver` (armazenamento do app) → `printFromFile` | Sim | `true` / `false` | D, N (router + resolver) | **Corrigido:** usava `Environment.getExternalStorageDirectory()/Download` (obsoleto, sem acesso no Android 10+). |
-| `Payment.printer` (usado por `PrintRenderWidget`) | `paymentPrinterBasic` | Router → `printer` → `printFromFile` | Sim | `true` / `false` | D, N (router) | **Corrigido:** eventos de "arquivo não encontrado" eram enviados da thread io. |
-| `Payment.printerFilePath` | `paymentPrinterFilePath` | Router → `printerByFilePath` | Sim | `true` / `false` | D, N (router) | Idem acima. |
-| `Payment.rebootDevice` | `paymentReboot` | Router (**background**) → `PlugPag.reboot` | Sim | `true` / `false` | D, N | **Corrigido:** falha do SDK era engolida (sempre `true`). |
-| `Payment.beep` | `paymentBeep` | Router (**background**) → `PlugPag.beep` | Sim | `true` / `false` | D, N | Idem acima. |
-| `Payment.getSerialNumber` | `paymentGetSerialNumber` | Router (**background**) → `PlugPag.getSerialNumber` | Sim | serial / `''` | D, N | IPC na main thread (otimizado). |
-| `Payment.getUserData` | `paymentGetUserData` | Router (**background**) → `getUserData` → `onFinishedResponse` (method `userData`) | Sim | `true` / `ERROR`, `LICENCE_ERROR` | D, N | IPC na main thread (otimizado). |
-| `Payment.calculateInstallments` | `paymentCalculateInstallments` | Router (**background**) → `calculateInstallments` → `List<Map>` | Sim | `List<PlugPagInstallment>` / `[]` | D, N | IPC na main thread (otimizado). Tipo inválido devolve `[]` sem chamar o nativo. |
-| `PagseguroPaymentTech.initNfc` / `Nfc.setHandler` | (só Dart) | `PagseguroEventDispatcher` | n/a | `Nfc` / exceção sem `initPayment` | D | **Corrigidos:** a segunda chamada ignorava o handler novo; registrar o NFC "roubava" o canal do `Payment` (eventos perdidos). |
-| `Nfc.closeMethodCallHandler` | (só Dart) | `PagseguroEventDispatcher.detachNfc` | n/a | n/a | D | **Corrigido:** removia o handler do canal inteiro (pagamento também parava de receber eventos). |
-| `Nfc.readNfc` | `paymentReadNfc` | Router → `NFCPresenter.readNFCCard` → LED + `NFCUseCase.readNfc` (`startNFCCardDirectly`/`readNFCCardDirectly`) | Sim | `true` + `showSuccess`/`showErrorRead` | D, N (router) | `NFCUseCase` sem teste JVM (depende do PlugPag/hardware). |
-| `Nfc.writeNfc` | `paymentWriteNfc` | Router → `writeNFCCard` → `UserDataManager.writeUserData` | Sim | `true` + `showSuccessWrite`/`showErrorWrite` | D, N (router) | Argumento nulo dá NPE em `Utils.adicionaAsterisco` (vira `ERROR`). |
-| `Nfc.reWriteNfc` | `paymentReWriteNfc` | Router → `reWriteNFCCard` | Sim | `true` + `showSuccessReWrite`/`showErrorReWrite` | D, N (router) | idem |
-| `Nfc.refundNfc` | `paymentReFundNfc` | Router → `reFundNFCCard` | Sim | `true` + `showSuccessRefundNfc`/`showErrorRefundNfc` | D, N (router) | **Corrigido (Dart):** `SHOW_ERROR_REFUND_NFC.method` devolvia `null`. |
-| `Nfc.formatNfc` | `paymentFormatNfc` | Router → `formatNFCCard` → `clearBlocks` | Sim | `true` + `showSuccessFormat`/`showErrorFormat` | D, N (router) | idem |
-| `Nfc.debitNfc` | `paymentDebitNfc` | Router → `debitNFCCard` | Sim | `true` + `showSuccessDebitNfc`/`showErrorDebitNfc` | D, N (router) | idem |
-| `PrintRenderWidget.print` | `paymentPrinterBasic` | idem `printer` | Sim | fecha a tela após imprimir | D (widget) | **Corrigido:** a tela ficava aberta se a imagem falhasse; assertion `!debugNeedsPaint` em debug durante a animação. |
-| `PagseguroPage` / `PagseguroController` | `initPayment`, `paymentIsAuthenticated`, `paymentActivePinpad`, pagamentos, `paymentAbort` | idem | Sim | `Navigator.pop(PagseguroResponseModel)` | D (widget) | **Corrigidos:** erro do nativo ao iniciar pagamento deixava a tela presa e gerava erro não tratado; JSON inválido quebrava; valor em `double` (adicionado `amountInCents`). |
-| Método desconhecido | qualquer outro | `ChannelRequestHandler` / Router | Não | `notImplemented` | N | — |
+| Método Dart | Método do canal | Handler nativo → SDK | Resposta (sucesso / erro) | Testado? | Problemas encontrados |
+|---|---|---|---|---|---|
+| `PagseguroPaymentTech.initPayment` / `Payment.create` / `Payment.setHandler` | `initPayment` | `ChannelRequestHandler` → `PagSeguroPayment.setMaxTimeShowPopup` | `true` (`ready` = true) / `ERROR` → `onError` | D, N | 4.0.0: não envia mais chaves nem valida licença. |
+| `Payment.setPrintDialogMaxTime` | `paymentSetPrintDialogMaxTime` | `ChannelRequestHandler` (configuração local) → `PlugPagCustomPrinterLayout` | `true` / `ERROR` | D, N | **Corrigido:** criava um layout novo e descartava o estilo de `setDialogstyle` (o mesmo acontecia em todo `initPayment`). |
+| `Payment.setDialogstyle` | `paymentStyleDialog` | Router → `PagSeguroPayment.setDialogStyle` → `setPlugPagCustomPrinterLayout` | `true` / `ERROR` | D, N | **Otimizado:** recriava os 3 presenters sem necessidade. `maxTimeShowPopUp` nulo dava NPE (agora usa 30). |
+| `Payment.activePinpad` | `paymentActivePinpad` | Router → `PaymentsPresenter.activate` → `initializeAndActivatePinpad` | `true` + `onAuthProgress`/`onFinishedResponse` (method `activate`) / `false` (erro tratado) | D, N (presenter + caso de uso) | Mensagem de erro nula enviada ao Dart (corrigido). |
+| `Payment.creditPayment` | `paymentCredit` | Router → `PaymentsPresenter.creditPayment` → `PaymentsUseCase.doCreditPayment` → `doPayment(TYPE_CREDITO, À vista)` | `true` + eventos (`writeToFile`, `onMessage`, `onFinishedResponse`, `onTransactionSuccess`) / `ERROR` | D, N (presenter + caso de uso) | **Corrigidos:** `onTransactionSuccess` nunca chegava ao Dart (nome divergente); terminal não ativado enviava `activeDialog` da thread io (rejeitado pelo Flutter) e podia dar NPE em `mSubscribe`; erro sem mensagem chegava `null` e quebrava o `onError` no Dart. |
+| `Payment.creditPaymentParc` | `paymentCreditParc` | idem → `doPayment(TYPE_CREDITO, type, parc)` | idem | D, N | Idem acima. |
+| `Payment.debitPayment` | `paymentDebit` | idem → `doPayment(TYPE_DEBITO)` | idem | D, N | Idem acima. |
+| `Payment.pixPayment` | `paymentPix` | idem → `doPayment(TYPE_PIX)` | idem | D, N | Idem acima. |
+| `Payment.voucherPayment` | `paymentVoucher` | idem → `doPayment(TYPE_VOUCHER)` | idem | D, N | Idem acima. |
+| `Payment.startPayment` | `startPayment` | idem → `doPayment(type, amount, installmentType, installments)` | idem | D, N | Idem acima. |
+| `Payment.abortTransaction` / `Nfc.abortTransaction` | `paymentAbort` | Router → `PaymentsPresenter.abortTransaction` → `PlugPag.abort` (`PlugPagAbortResult`) | `true` + `onAbortedSuccessfully` se o SDK confirmar / `ERROR`, `onError` | D, N | **Corrigidos:** falha do SDK derrubava o app (`subscribe()` sem `onError`); sobrescrevia `mSubscribe` da transação (vazamento); o `Completable` nunca completava; `onAbortedSuccessfully` nunca era enviado. |
+| `Payment.lastTransaction` / `Nfc.lastTransaction` | `paymentLastTransaction` | Router → `getLastTransaction` → `getLastApprovedTransaction` | `true` + `onTransactionInfo` / `onError` | D, N | **Corrigido:** `Integer` nulo do SDK (`result`, `originalAmount`, `paymentType`) gerava NPE. |
+| `Payment.refund` / `Nfc.refund` | `paymentRefund` | Router (valida código/id) → `doRefund` → `voidPayment(code, id, print=true)` | `true` + eventos / `INVALID_ARGUMENT` (Dart e nativo, sem chamar o SDK), `ERROR` | D, N | **Corrigido:** código/id nulos chegavam ao SDK. Mesma correção de NPE acima. |
+| `Payment.isAuthenticated` | `paymentIsAuthenticated` | Router → `isAuthenticate` → `PlugPag.isAuthenticated` | `true` + `onAuthProgress` + `onFinishedResponse` (method `activate`) | D, N | Mensagem de erro nula (corrigido). |
+| `Payment.printerfromFile` | `paymentPrinterFile` | Router (**background**) → `PrinterPresenter.printerFromFile` → `printFromFile` | `true` / `false` | D, N (router) | **Otimizado:** impressão síncrona rodava na main thread (risco de ANR). |
+| `Payment.printerFile` | `paymentPrinter` | Router → `printFile` → `PrintFileResolver` (armazenamento do app) → `printFromFile` | `true` / `false` | D, N (router + resolver) | **Corrigido:** usava `Environment.getExternalStorageDirectory()/Download` (obsoleto, sem acesso no Android 10+). |
+| `Payment.printer` (usado por `PrintRenderWidget`) | `paymentPrinterBasic` | Router → `printer` → `printFromFile` | `true` / `false` | D, N (router) | **Corrigido:** eventos de "arquivo não encontrado" eram enviados da thread io. |
+| `Payment.printerFilePath` | `paymentPrinterFilePath` | Router → `printerByFilePath` | `true` / `false` | D, N (router) | Idem acima. |
+| `Payment.rebootDevice` | `paymentReboot` | Router (**background**) → `PlugPag.reboot` | `true` / `false` | D, N | **Corrigido:** falha do SDK era engolida (sempre `true`). |
+| `Payment.beep` | `paymentBeep` | Router (**background**) → `PlugPag.beep` | `true` / `false` | D, N | Idem acima. |
+| `Payment.getSerialNumber` | `paymentGetSerialNumber` | Router (**background**) → `PlugPag.getSerialNumber` | serial / `''` | D, N | IPC na main thread (otimizado). |
+| `Payment.getUserData` | `paymentGetUserData` | Router (**background**) → `getUserData` → `onFinishedResponse` (method `userData`) | `true` / `ERROR` | D, N | IPC na main thread (otimizado). |
+| `Payment.calculateInstallments` | `paymentCalculateInstallments` | Router (**background**) → `calculateInstallments` → `List<Map>` | `List<PlugPagInstallment>` / `[]` | D, N | IPC na main thread (otimizado). Tipo inválido devolve `[]` sem chamar o nativo. |
+| `PagseguroPaymentTech.initNfc` / `Nfc.setHandler` | (só Dart) | `PagseguroEventDispatcher` | `Nfc` / exceção sem `initPayment` | D | **Corrigidos:** a segunda chamada ignorava o handler novo; registrar o NFC "roubava" o canal do `Payment` (eventos perdidos). |
+| `Nfc.closeMethodCallHandler` | (só Dart) | `PagseguroEventDispatcher.detachNfc` | n/a | D | **Corrigido:** removia o handler do canal inteiro (pagamento também parava de receber eventos). |
+| `Nfc.readNfc` | `paymentReadNfc` | Router → `NFCPresenter.readNFCCard` → LED + `NFCUseCase.readNfc` (`startNFCCardDirectly`/`readNFCCardDirectly`) | `true` + `showSuccess`/`showErrorRead` | D, N (router) | `NFCUseCase` sem teste JVM (depende do PlugPag/hardware). |
+| `Nfc.writeNfc` | `paymentWriteNfc` | Router → `writeNFCCard` → `UserDataManager.writeUserData` | `true` + `showSuccessWrite`/`showErrorWrite` | D, N (router) | Argumento nulo dá NPE em `Utils.adicionaAsterisco` (vira `ERROR`). |
+| `Nfc.reWriteNfc` | `paymentReWriteNfc` | Router → `reWriteNFCCard` | `true` + `showSuccessReWrite`/`showErrorReWrite` | D, N (router) | idem |
+| `Nfc.refundNfc` | `paymentReFundNfc` | Router → `reFundNFCCard` | `true` + `showSuccessRefundNfc`/`showErrorRefundNfc` | D, N (router) | **Corrigido (Dart):** `SHOW_ERROR_REFUND_NFC.method` devolvia `null`. |
+| `Nfc.formatNfc` | `paymentFormatNfc` | Router → `formatNFCCard` → `clearBlocks` | `true` + `showSuccessFormat`/`showErrorFormat` | D, N (router) | idem |
+| `Nfc.debitNfc` | `paymentDebitNfc` | Router → `debitNFCCard` | `true` + `showSuccessDebitNfc`/`showErrorDebitNfc` | D, N (router) | idem |
+| `PrintRenderWidget.print` | `paymentPrinterBasic` | idem `printer` | fecha a tela após imprimir | D (widget) | **Corrigido:** a tela ficava aberta se a imagem falhasse; assertion `!debugNeedsPaint` em debug durante a animação. |
+| `PagseguroPage` / `PagseguroController` | `initPayment`, `paymentIsAuthenticated`, `paymentActivePinpad`, pagamentos, `paymentAbort` | idem | `Navigator.pop(PagseguroResponseModel)` | D (widget) | **Corrigidos:** erro do nativo ao iniciar pagamento deixava a tela presa e gerava erro não tratado; JSON inválido quebrava; valor em `double` (adicionado `amountInCents`). |
+| Método desconhecido | qualquer outro | `ChannelRequestHandler` / Router | `notImplemented` | N | — |
 
 ### Eventos nativo → Dart
 
@@ -103,7 +99,7 @@ com sucesso/erro/resposta única e, onde indicado, caso de uso/presenter com SDK
 1. **`onTransactionSuccess` nunca chegava ao app**: nome divergente (`onTransactionSuccess` no Java,
    `onTransactionSucess` no Dart). O Dart aceita as duas grafias.
 2. **Canal compartilhado entre `Payment` e `Nfc`**: o último `setMethodCallHandler` recebia tudo.
-   Com o NFC ativo, `onFinishedResponse` (resultado da licença e das transações) era perdido; depois de
+   Com o NFC ativo, `onFinishedResponse` (resultado das transações) era perdido; depois de
    `payment.setHandler`, os eventos `show*` eram perdidos; `closeMethodCallHandler` desligava também o
    pagamento. Corrigido com `PagseguroEventDispatcher`.
 3. **Eventos enviados de thread de background**: `MethodChannel.invokeMethod` fora da main thread é
@@ -147,13 +143,12 @@ com sucesso/erro/resposta única e, onde indicado, caso de uso/presenter com SDK
 | Otimização | Por quê |
 |---|---|
 | `getSerialNumber`, `getUserData`, `calculateInstallments`, `beep`, `rebootDevice` e `printerfromFile` em background (`AsyncExecutor`), resposta na main thread | Eram chamadas bloqueantes (IPC com o PlugPagService; a impressão leva segundos) executadas na main thread, com risco de ANR. O `Future` continua completando depois que o SDK responde. |
-| `EncryptedLicenceStorage` cria `MasterKey` + `EncryptedSharedPreferences` uma vez por instância | Eram recriados (Keystore + Tink) em toda leitura/gravação do cache, inclusive na main thread a cada pagamento (checagem local da licença). Nome das prefs, chave e formato mantidos. |
-| Uma única `CheckLicenceTech` compartilhada entre o gate e os casos de uso | Cada `PaymentsUseCase` criava a sua (com storage próprio). |
+| 4.0.0: licença removida (classes `licence/*`, gate por operação, checagem só-cache nos casos de uso, `okhttp` e `security-crypto`) | Cada operação deixava de esperar a validação em background (rede/cache criptografado) e vai direto ao SDK. O AAR ficou menor. |
 | Presenters não são recriados em `setMaxTimeShowPopup`/`setDialogStyle` | Todos usam o mesmo `PlugPag`. Recriar não tinha efeito e deixava as assinaturas antigas sem `dispose`. |
-| `onDetachedFromEngine` libera todos os presenters (antes só o de pagamento) e as duas threads de background | Evita vazamento de assinaturas RxJava e threads. |
+| `onDetachedFromEngine` libera todos os presenters (antes só o de pagamento) e a thread de background | Evita vazamento de assinaturas RxJava e threads. |
 | Uma instância de `Gson` (`JsonResults`) | Era criada uma por evento. |
 | Despachante único de eventos no Dart (`PagseguroEventDispatcher`) e helpers `_invokeBool`/`_invokeOrFalse`/`_paymentArguments` | Remove a duplicação dos dois `_callHandler` (Payment/Nfc) e dos blocos try/catch idênticos. |
-| Gate de licença extraído para `ChannelRequestHandler` (sem Android) | Permite testar o gate por método na JVM. Comportamento idêntico ao anterior. |
+| `ChannelRequestHandler` (sem Android) | Permite testar o roteamento do canal por método na JVM. |
 | `PaymentGateway` (fachada do PlugPag), `EventSink`, `ResultMappers` | Isolam o SDK e o canal para testes com fakes. Sem mudança em produção. |
 | Remoção de código morto: `transactions/*` (4 classes), `core/keyboardUtils`, `helpers/RetryAction`, eventos `onReadCard`/`onWriteCard`/`onAbort` | Sem referências. Os arquivos removidos aparecem no dry-run como "checked-in files ignored" até o commit. |
 | `.pubignore` | Tira `doc/`, `local.properties`, keystores, `.DS_Store` e `*.hprof` do pacote publicado (antes ia `android/native/local.properties`). |
@@ -161,10 +156,10 @@ com sucesso/erro/resposta única e, onde indicado, caso de uso/presenter com SDK
 
 ## 5. Testes
 
-| Suíte | Antes | Depois | Cobertura |
+| Suíte | 3.3.0 | 4.0.0 | Cobertura |
 |---|---|---|---|
-| JUnit (`android/native`) | 77 | 160 | Licença (existente); `ChannelRequestHandler` (gate para os 27 métodos de negócio, `LICENCE_ERROR` sem chamar o SDK, `notImplemented`, resposta única, plugin finalizado); `PaymentMethodRouter` (todos os 28 métodos com sucesso e erro, argumentos exatos, execução em background); `PaymentsUseCase` e `PaymentsPresenter` com `PaymentGateway` fake e RxJava síncrono (dados enviados ao SDK, aprovado/recusado, terminal não ativado, senha, abort, ativação, status, última transação, dados do usuário, parcelas, sem licença); `PaymentsFragment`/`NFCFragment` (nomes e argumentos dos eventos); `ResultMappers`/`ActionResult` (JSON lido pelo Dart, inteiros nulos); `PrintFileResolver`; estorno com `INVALID_ARGUMENT`; `onAbortedSuccessfully`; `Utils`. |
-| Dart (`flutter test`) | 14 | 123 | Todos os métodos públicos de `Payment` e `Nfc` (argumentos exatos, sucesso, `PlatformException` e `LICENCE_ERROR`); sanitização de `userReference`; estorno com `INVALID_ARGUMENT`; todos os eventos para `PaymentHandler` e `NfcHandler`, convivência dos dois, nulos e eventos desconhecidos; `PagseguroResponseModel`, `PlugPagInstallment`, enums/extensões; `PagseguroPage`/`PagseguroController` (widget); `PrintRenderWidget` (widget, com `path_provider` simulado). |
+| JUnit (`android/native`) | 160 | 89 | Os testes de licença (regras, URL, cache, resposta HTTP, `CheckLicenceTech`) foram apagados com a licença. Restam: `ChannelRequestHandler` (os 28 métodos de negócio chegam ao SDK uma vez, `initPayment`, `notImplemented`, resposta única, plugin finalizado); `PaymentMethodRouter` (todos os 28 métodos com sucesso e erro, argumentos exatos, execução em background); `PaymentsUseCase` e `PaymentsPresenter` com `PaymentGateway` fake e RxJava síncrono (dados enviados ao SDK, aprovado/recusado, terminal não ativado, senha, abort, ativação, status, última transação, dados do usuário, parcelas); `PaymentsFragment`/`NFCFragment` (nomes e argumentos dos eventos); `ResultMappers`/`ActionResult` (JSON lido pelo Dart, inteiros nulos); `PrintFileResolver`; estorno com `INVALID_ARGUMENT`; `onAbortedSuccessfully`; `Utils`. |
+| Dart (`flutter test`) | 123 | 118 | Todos os métodos públicos de `Payment` e `Nfc` (argumentos exatos, sucesso e `PlatformException`); `initPayment` (só `maxTimeShowPopUp`, `ready`, erro vira `onError`); sanitização de `userReference`; estorno com `INVALID_ARGUMENT`; todos os eventos para `PaymentHandler` e `NfcHandler`, convivência dos dois, nulos e eventos desconhecidos; `PagseguroResponseModel`, `PlugPagInstallment`, enums/extensões; `PagseguroPage`/`PagseguroController` (widget); `PrintRenderWidget` (widget, com `path_provider` simulado). Os testes de licença foram apagados. |
 
 Comandos: ver a seção "Testes" do README.
 
@@ -174,7 +169,7 @@ Comandos: ver a seção "Testes" do README.
    foram testados com fakes. Falta rodar em uma maquininha (comportamento do PlugPagService,
    mensagens, tempos, resultado do `abort()`).
 2. **Sem teste JVM** (dependem de Android ou do PlugPag real, Robolectric evitado):
-   `MainThreadEventSink`, `AndroidAsyncExecutor`, `EncryptedLicenceStorage`, `PlugPagPaymentGateway`,
+   `MainThreadEventSink`, `AndroidAsyncExecutor`, `PlugPagPaymentGateway`,
    `PagSeguroPayment` (construtor cria `PlugPag(Context)`), `PrintFileResolver.appDirectories`,
    `PrinterUsecase`, `NFCUseCase` e `NFCPresenter`.
 3. **NFC: cada chamada ao canal cancela a assinatura NFC anterior** (`initializePresenters` chama
@@ -183,8 +178,7 @@ Comandos: ver a seção "Testes" do README.
 4. **Mensagem final da transação**: se o último evento do SDK foi de senha, a resposta final reaproveita
    o `eventCode` e mostra "VALOR/SENHA" em vez da mensagem do SDK (comportamento antigo, mantido).
 5. **`PagseguroPage` usa `onPopInvoked`** (obsoleto). Trocar por `onPopInvokedWithResult` exige subir o
-   mínimo do Flutter (hoje `>=3.0.0`).
-6. **Commit dos arquivos removidos**: `android/native/src/main/java/br/com/jylabtech/pagseguro_payment_tech/`
-   `transactions/TransactionsContract.java`, `TransactionsFragment.java`, `TransactionsPresenter.java`,
-   `TransactionsUseCase.java`, `core/keyboardUtils.java` e `helpers/RetryAction.java`. Até o commit,
-   o `dart pub publish --dry-run` mostra o aviso "6 checked-in files are ignored by a .gitignore".
+   mínimo do Flutter (hoje `>=3.16.0`) para 3.22.
+6. **Commit dos arquivos removidos (4.0.0)**: `android/native/.../licence/*` (9 classes e 6 testes),
+   `lib/src/licence/constants/licence_constants.dart`, `test/licence_test.dart` e `test/nfc_licence_test.dart`.
+   Até o commit, o `dart pub publish --dry-run` pode mostrar um aviso sobre arquivos removidos.

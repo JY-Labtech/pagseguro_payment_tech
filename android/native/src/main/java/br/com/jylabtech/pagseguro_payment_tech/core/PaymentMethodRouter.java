@@ -7,7 +7,7 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 
 /**
- * Roteia as chamadas de negócio do MethodChannel (já liberadas pelo gate de licença) para as
+ * Roteia as chamadas de negócio do MethodChannel para as
  * operações nativas e garante que o {@link MethodChannel.Result} seja completado exatamente uma vez:
  * <ul>
  *   <li>a operação é disparada e o result recebe o valor esperado pelo Dart ({@code true}, o

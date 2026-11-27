@@ -1,12 +1,11 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pagseguro_payment_tech/pagseguro_payment_tech.dart';
-import 'package:pagseguro_payment_tech/src/licence/constants/licence_constants.dart' show licenceCheck;
 
 import 'helpers/fake_native.dart';
 
 /// Cada método público de [Payment]: (a) nome e argumentos enviados ao nativo,
-/// (b) tratamento do sucesso e (c) tratamento do erro (PlatformException genérica e LICENCE_ERROR).
+/// (b) tratamento do sucesso e (c) tratamento do erro (PlatformException genérica e INVALID_ARGUMENT).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -28,55 +27,57 @@ void main() {
 
   Map<String, dynamic> argsOf(String method) => Map<String, dynamic>.from(native.last(method).arguments as Map);
 
-  group('initPayment / licença', () {
-    test('envia licenceKey, licenceInternalKey padrão e maxTimeShowPopUp', () async {
+  group('initPayment', () {
+    test('envia só maxTimeShowPopUp (nenhuma chave)', () async {
       PagseguroPaymentTech.resetForTesting();
-      final p = PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: 'KEY', maxTimeShowPopUp: 45);
-      expect(await p.licenceReady, isTrue);
-      expect(native.last('initPayment').arguments, {
-        'licenceKey': 'KEY',
-        'licenceInternalKey': licenceCheck,
-        'maxTimeShowPopUp': 45,
-      });
+      final p = PagseguroPaymentTech.I.initPayment(handler: handler, maxTimeShowPopUp: 45);
+      expect(await p.ready, isTrue);
+      expect(native.last('initPayment').arguments, {'maxTimeShowPopUp': 45});
       expect(PagseguroPaymentTech.I.payment, same(p));
     });
 
-    test('nativo respondendo algo diferente de true deixa licenceReady false', () async {
-      native.responses['initPayment'] = (_) => null;
-      final p = PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: 'KEY');
-      expect(await p.licenceReady, isFalse);
+    test('maxTimeShowPopUp padrão é 30', () async {
+      PagseguroPaymentTech.resetForTesting();
+      final p = PagseguroPaymentTech.I.initPayment(handler: handler);
+      await p.ready;
+      expect(native.last('initPayment').arguments, {'maxTimeShowPopUp': 30});
     });
 
-    test('LICENCE_ERROR no initPayment não duplica o onError (o nativo já enviou)', () async {
-      native.responses['initPayment'] = (_) => throw licenceError;
-      final p = PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: 'KEY');
-      expect(await p.licenceReady, isFalse);
-      expect(handler.calls.where((c) => c.startsWith('onError')), isEmpty);
+    test('nativo respondendo algo diferente de true deixa ready false', () async {
+      native.responses['initPayment'] = (_) => null;
+      final p = PagseguroPaymentTech.I.initPayment(handler: handler);
+      expect(await p.ready, isFalse);
+    });
+
+    test('PlatformException no initPayment vira onError', () async {
+      native.responses['initPayment'] = (_) => throw genericError;
+      final p = PagseguroPaymentTech.I.initPayment(handler: handler);
+      expect(await p.ready, isFalse);
+      expect(handler.calls, ['onError:terminal ocupado']);
     });
 
     test('erro inesperado (não PlatformException) vira onError', () async {
       native.responses['initPayment'] = (_) => throw StateError('falhou');
-      final p = PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: 'KEY');
-      expect(await p.licenceReady, isFalse);
+      final p = PagseguroPaymentTech.I.initPayment(handler: handler);
+      expect(await p.ready, isFalse);
       expect(handler.calls.single, startsWith('onError:'));
     });
 
-    test('setHandler troca o handler e revalida a licença', () async {
+    test('setHandler troca o handler e reinicializa o nativo', () async {
       final other = RecordingPaymentHandler();
       payment.setHandler(other);
-      expect(await payment.licenceReady, isTrue);
+      expect(await payment.ready, isTrue);
       expect(native.methods, ['initPayment']);
       await native.sendEvent('onMessage', 'oi');
       expect(other.calls, ['onMessage:oi']);
       expect(handler.calls, isEmpty);
     });
 
-    test('initPayment de novo reaproveita a instância e atualiza chaves e handler', () async {
+    test('initPayment de novo reaproveita a instância e atualiza tempo e handler', () async {
       final other = RecordingPaymentHandler();
-      final again = PagseguroPaymentTech.I.initPayment(handler: other, licenceKey: 'OUTRA', maxTimeShowPopUp: 10);
+      final again = PagseguroPaymentTech.I.initPayment(handler: other, maxTimeShowPopUp: 10);
       expect(again, same(payment));
-      await again.licenceReady;
-      expect(native.last('initPayment').arguments['licenceKey'], 'OUTRA');
+      await again.ready;
       expect(native.last('initPayment').arguments['maxTimeShowPopUp'], 10);
       expect(again.paymentHandler, same(other));
     });
@@ -179,11 +180,11 @@ void main() {
     };
 
     for (final entry in paymentCalls.entries) {
-      test('${entry.key}: PlatformException genérica e LICENCE_ERROR são propagadas', () async {
+      test('${entry.key}: PlatformException genérica e INVALID_ARGUMENT são propagadas', () async {
         native.errorForAll = genericError;
         await expectLater(entry.value(payment), throwsGenericError);
-        native.errorForAll = licenceError;
-        await expectLater(entry.value(payment), throwsLicenceError);
+        native.errorForAll = invalidArgumentError;
+        await expectLater(entry.value(payment), throwsInvalidArgumentError);
         expect(handler.calls, isNot(contains('onTransactionSuccess')));
       });
     }
@@ -254,7 +255,7 @@ void main() {
       expect(argsOf('paymentActivePinpad'), {'code': '403938'});
       native.errorForAll = genericError;
       expect(await payment.activePinpad('403938'), isFalse);
-      native.errorForAll = licenceError;
+      native.errorForAll = invalidArgumentError;
       expect(await payment.activePinpad('403938'), isFalse);
     });
 
@@ -265,7 +266,7 @@ void main() {
       native.errorForAll = genericError;
       expect(await payment.rebootDevice(), isFalse);
       expect(await payment.beep(), isFalse);
-      native.errorForAll = licenceError;
+      native.errorForAll = invalidArgumentError;
       expect(await payment.beep(), isFalse);
     });
 
@@ -276,7 +277,7 @@ void main() {
       expect(await payment.getSerialNumber(), '');
       native.responses['paymentGetSerialNumber'] = (_) => throw genericError;
       expect(await payment.getSerialNumber(), '');
-      native.responses['paymentGetSerialNumber'] = (_) => throw licenceError;
+      native.responses['paymentGetSerialNumber'] = (_) => throw invalidArgumentError;
       expect(await payment.getSerialNumber(), '');
     });
   });
@@ -295,8 +296,8 @@ void main() {
       ]);
     });
 
-    test('erro genérico ou de licença devolve false', () async {
-      for (final error in [genericError, licenceError]) {
+    test('qualquer PlatformException devolve false', () async {
+      for (final error in [genericError, invalidArgumentError]) {
         native.errorForAll = error;
         expect(await payment.printerfromFile('/a'), isFalse);
         expect(await payment.printerFile('a'), isFalse);
@@ -328,12 +329,12 @@ void main() {
       expect(native.calls, isEmpty);
     });
 
-    test('resposta que não é lista, erro genérico ou LICENCE_ERROR devolvem lista vazia', () async {
+    test('resposta que não é lista ou PlatformException devolvem lista vazia', () async {
       native.responses['paymentCalculateInstallments'] = (_) => 'nada';
       expect(await payment.calculateInstallments('2000', 1), isEmpty);
       native.responses['paymentCalculateInstallments'] = (_) => throw genericError;
       expect(await payment.calculateInstallments('2000', 1), isEmpty);
-      native.responses['paymentCalculateInstallments'] = (_) => throw licenceError;
+      native.responses['paymentCalculateInstallments'] = (_) => throw invalidArgumentError;
       expect(await payment.calculateInstallments('2000', 1), isEmpty);
     });
   });
@@ -348,7 +349,7 @@ void main() {
       PagseguroPaymentTech.resetForTesting();
       expect(() => PagseguroPaymentTech.I.initNfc(handler: RecordingNfcHandler()), throwsException);
       expect(() => PagseguroPaymentTech.I.nfc, throwsException);
-      PagseguroPaymentTech.I.initPayment(handler: handler, licenceKey: 'KEY');
+      PagseguroPaymentTech.I.initPayment(handler: handler);
       final nfc = PagseguroPaymentTech.I.initNfc(handler: RecordingNfcHandler());
       final other = RecordingNfcHandler();
       expect(PagseguroPaymentTech.I.initNfc(handler: other), same(nfc));
@@ -359,7 +360,7 @@ void main() {
     test('constantes do canal', () {
       expect(CHANNEL_NAME, channelName);
       expect(CHANNEL_NFC_NAME, channelName);
-      expect(Payment.licenceErrorCode, 'LICENCE_ERROR');
+      expect(Payment.invalidArgumentCode, 'INVALID_ARGUMENT');
     });
   });
 

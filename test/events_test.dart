@@ -164,8 +164,8 @@ void main() {
     });
 
     test('onFinishedResponse continua chegando ao PaymentHandler com o NFC ativo (antes: perdido)', () async {
-      await native.sendEvent('onFinishedResponse', '{"method":"licence"}');
-      expect(paymentHandler.calls, ['onFinishedResponse:{"method":"licence"}']);
+      await native.sendEvent('onFinishedResponse', '{"method":"userData"}');
+      expect(paymentHandler.calls, ['onFinishedResponse:{"method":"userData"}']);
       expect(nfcHandler.calls, isEmpty);
     });
 
